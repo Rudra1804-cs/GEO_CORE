@@ -573,7 +573,7 @@ export default function App() {
                               </div>
                               <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1">
                                 {continentStats[focusedContinent].guessedList.map(c => (
-                                  <div key={c.id} className="px-2 py-1.5 rounded bg-emerald-500/5 border border-emerald-500/10 text-[10px] text-emerald-200/80 flex items-center gap-2 group hover:bg-emerald-500/10 transition-colors">
+                                  <div key={c.id} title={c.name} className="px-2 py-1.5 rounded bg-emerald-500/5 border border-emerald-500/10 text-[10px] text-emerald-200/80 flex items-center gap-2 group hover:bg-emerald-500/10 transition-colors">
                                     <div className="w-1 h-1 rounded-full bg-emerald-500" />
                                     <span className="truncate">{c.name}</span>
                                   </div>
@@ -591,7 +591,7 @@ export default function App() {
                               </div>
                               <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1">
                                 {continentStats[focusedContinent].missedList.map(c => (
-                                  <div key={c.id} className="px-2 py-1.5 rounded bg-rose-500/5 border border-rose-500/10 text-[10px] text-rose-200/80 flex items-center gap-2 group hover:bg-rose-500/10 transition-colors">
+                                  <div key={c.id} title={c.name} className="px-2 py-1.5 rounded bg-rose-500/5 border border-rose-500/10 text-[10px] text-rose-200/80 flex items-center gap-2 group hover:bg-rose-500/10 transition-colors">
                                     <div className="w-1 h-1 rounded-full bg-rose-500" />
                                     <span className="truncate">{c.name}</span>
                                   </div>
@@ -615,7 +615,7 @@ export default function App() {
                       </div>
                       <div className="grid grid-cols-2 gap-2 h-48 overflow-y-auto pr-2 custom-scrollbar">
                         {missedCountries.map(c => (
-                          <div key={c.id} className="p-3 rounded-xl bg-neutral-900 border border-neutral-800/50 text-[10px] flex flex-col justify-between group hover:border-rose-500/30 transition-all">
+                          <div key={c.id} title={c.name} className="p-3 rounded-xl bg-neutral-900 border border-neutral-800/50 text-[10px] flex flex-col justify-between group hover:border-rose-500/30 transition-all">
                             <span className="font-bold text-neutral-300 truncate uppercase tracking-widest">{c.name}</span>
                             <span className="text-neutral-600 text-[8px] font-mono">{c.continent} • {Math.floor(c.area/1000).toLocaleString()}k km²</span>
                           </div>

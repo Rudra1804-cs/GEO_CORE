@@ -1,61 +1,49 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-# Global Hegemony: Territorial Retrieval Protocol
+# Global Surveillance & Retrieval Protocol (Geo-Guesser)
 
-A high-fidelity regional identification system designed to test and evaluate global geographic dominance. This application serves as a tactical interface for identifying and reclaiming the world's sovereign territories based on landmass and economic output.
-
-## 🌏 Mission Overview
-
-The objective is to identify all recognized global territories through the primary command interface. As you input designations, the tactical world map updates in real-time, visualizing your progress toward total global coverage.
+A high-precision, interactive world geography game built with React, D3.js, and Tailwind CSS. The application features a "cyber-industrial" tactical aesthetic, designed for rapid territorial identification and sector analysis.
 
 ## 🚀 Core Features
 
-### 1. Tactical Command Interface
-- **Dynamic Input Analysis**: Real-time name verification with support for common aliases and international designations (e.g., "USA", "UK", "UAE").
-- **Visual Feedback System**: Immediate map updates using a high-precision SVG engine. Correctly identified sectors transition to "Captured" (Green) status.
-- **GDP & Area Tracking**: Live telemetry showing the percentage of total global landmass and combined world GDP secured under your protocol.
+### 1. Tactical Gameplay Engine
+- **Predictive Identification**: Input country names or ISO codes to "reclaim" territories.
+- **Dynamic Feedback**: Visual confirmation on the world map with custom state transitions (Standard -> Identified -> Highlighted).
+- **Global Metrics**: Real-time tracking of:
+    - **Total Entities Identified** (Count)
+    - **Wealth Capture** (Global GDP percentage)
+    - **Area Coverage** (Global Landmass percentage)
 
-### 2. High-Precision Mapping Engine
-- **Interactive SVG Map**: Powered by D3.js and TopoJSON for smooth, responsive interactions.
-- **Deep Zoom Protocol**: Advanced zoom and pan capabilities to locate even the smallest island nations and city-states.
-- **Special Territorial Mappings**: Integrated regional logic for complex geopolitical zones (e.g., Kosovo/Serbia, Somaliland/Somalia) as requested by operational requirements.
+### 2. Sector Analysis Mode (Continent Review)
+- **Precision Zooming**: After the mission ends (or via selection), specific continental sectors can be deployed for detailed surveillance.
+- **Dynamic Framing Logic**: Individual continents feature custom padding and framing to ensure perfect visibility:
+    - **North America**: Enhanced focus specifically to capture the Caribbean and Central American archipelagos.
+    - **Europe/Asia/Africa/Oceania**: Tailored zoom levels for optimal geometric representation.
+- **Micro-Stats Analysis**: View specific GDP and Area metrics for the selected continent.
 
-### 3. Mission Analytics & Verdict
-Upon completion or manual extraction, the system generates a **Final Verdict** report:
-- **Sector Analysis**: A breakdown of the 6 major continental sectors (Africa, Asia, Europe, North America, South America, and Oceania).
-- **Efficiency Metrics**: Calculates retrieval success based on the number of marks found versus total available sectors.
-- **Detailed Surveillance Maps**: Selective framing for each continent with specialized padding logic to ensure perfect optical centering.
+### 3. Advanced Map Logistics
+- **Territorial Mapping & Geopolitical Handling**:
+    - **Somaliland** maps to **Somalia**.
+    - **Kosovo** maps to **Serbia**.
+    - **Northern Cyprus** maps to **Cyprus**.
+    - **Western Sahara** maps to **Morocco**.
+- **Interactive Tooltips**: High-speed, lightweight tooltips provide instant sector naming upon hover during review.
+- **Dynamic SVG Zoom/Pan**: Full zoom and pan capabilities across the global projection.
 
-### 4. Post-Mission Surveillance
-- **Retrieval Failures**: Exhaustive lists of missed territories categorized by sector for future operational improvements.
-- **High-Precision Overlays**: Individual continent reviews featuring a dedicated map view, "Captured" vs "Missing" list toggles, and specific regional telemetry (Captured Area in km², Recovered Wealth in $T).
-- **Precision Hover Tooltips**: Re-identification tooltips that appear during review when hovering over specific landmasses.
+### 4. Precision Reporting
+- **Identified List**: A detailed manifest of all reclaimed sectors within a continent.
+- **Missing Coverage**: Clear, high-contrast list of sectors still under neutral/unidentified status.
+- **Efficiency Metric**: Calculated as `(Identified Sectors / Total Regional Sectors) * 100`.
 
-## 🛠 Technical Specification
+### 5. Tactical Aesthetic
+- **Cyber-Industrial UI**: Minimalist neutral-900 palette with emerald-500 highlights.
+- **Glassmorphism Overlays**: Tactical readouts use backdrop-blur and semi-transparent layers.
+- **Atmospheric Pulsing**: Active "Surveillance" indicators to simulate live atmospheric capture.
 
-- **Frontend**: React 18+ with TypeScript
-- **Visualization**: D3.js (Data-Driven Documents)
-- **Animation**: Framer Motion for smooth UI transitions and mission report deployments
-- **Styling**: Tailwind CSS with a "Dark Modern/Tactical" aesthetic
-- **Data Layers**: Custom country database with Area and GDP metrics, synced with TopoJSON world atlas data.
+## 🛠 Technical Stack
+- **Framework**: React 18+ (Vite)
+- **Visuals**: D3.js (TopoJSON, Geo-Projections)
+- **Animations**: Framer Motion
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
 
----
-
-*Operational Note: This system is optimized for desktop surveillance. For full tactical awareness, ensure you are in a high-bandwidth environment.*
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/592b797d-1425-41e9-9d37-3360e09e9fe1
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 📊 Deployment
+The application is designed for full-precision desk surveillance but includes responsive breakpoints for mobile tactical oversight.

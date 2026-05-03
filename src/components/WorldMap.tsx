@@ -71,10 +71,40 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
         if (feature.id === "383" || name === "Kosovo") {
           feature.id = "688";
         }
+
+        // Handle Northern Cyprus mapping to Cyprus (196)
+        if (name === "N. Cyprus" || name === "Northern Cyprus") {
+          feature.id = "196";
+        }
         
         // Handle Somaliland (id 000 or specific name in some datasets)
         if (feature.id === "000" || name === "Somaliland" || name.includes("Somalialand")) {
           feature.id = "706"; // Map to Somalia
+        }
+
+        // Handle Puerto Rico mapping to USA (840)
+        if (feature.id === "630" || name === "Puerto Rico") {
+          feature.id = "840";
+        }
+
+        // Handle Greenland mapping to Denmark (208)
+        if (feature.id === "304" || name === "Greenland") {
+          feature.id = "208";
+        }
+
+        // Handle French Guiana and other territories mapping to France (250)
+        if (feature.id === "254" || feature.id === "540" || feature.id === "260" || name === "French Guiana" || name === "New Caledonia" || name.includes("French Southern") || name.includes("Antarctic Lands")) {
+          feature.id = "250";
+        }
+
+        // Handle Falkland Islands mapping to UK (826)
+        if (feature.id === "238" || name === "Falkland Is." || name === "Falkland Islands") {
+          feature.id = "826";
+        }
+
+        // Handle Kashmir and regional territories mapping to India (356)
+        if (name.includes("Kashmir") || name === "Siachen Glacier" || name.includes("Aksai") || name === "Aksai Chin" || name.includes("Gilgit") || name.includes("Baltistan") || name.includes("Arunachal")) {
+          feature.id = "356";
         }
         return feature;
       });
@@ -184,6 +214,8 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
           padding = 40;
         } else if (focusedContinent === 'Oceania') {
           padding = 120;
+        } else if (focusedContinent === 'Antarctica') {
+          padding = 150;
         }
 
         projection.fitExtent([[padding, padding], [width - padding, height - padding]], {

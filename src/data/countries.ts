@@ -158,6 +158,7 @@ export const COUNTRIES: CountryData[] = [
   { id: "690", name: "Seychelles", aliases: ["syc"], area: 452, gdp: 2100, continent: 'Africa' },
   { id: "694", name: "Sierra Leone", aliases: ["sle", "sl"], area: 71740, gdp: 4000, continent: 'Africa' },
   { id: "702", name: "Singapore", aliases: ["sgp"], area: 719, gdp: 530000, continent: 'Asia' },
+  { id: "010", name: "Antarctica", aliases: ["aq", "ata", "antarctica"], area: 14200000, gdp: 0, continent: 'Antarctica' },
   { id: "703", name: "Slovakia", aliases: ["svk"], area: 49037, gdp: 135000, continent: 'Europe' },
   { id: "705", name: "Slovenia", aliases: ["svn"], area: 20273, gdp: 72000, continent: 'Europe' },
   { id: "090", name: "Solomon Islands", aliases: ["slb"], area: 28896, gdp: 1700, continent: 'Oceania' },
@@ -211,5 +212,6 @@ export const CONTINENT_STATS = {
   'Europe': { area: 10180000, gdp: 24000000, color: 'text-blue-500', name: 'European Sector' },
   'North America': { area: 24709000, gdp: 35000000, color: 'text-emerald-500', name: 'North American Sector' },
   'South America': { area: 17840000, gdp: 4000000, color: 'text-amber-500', name: 'South American Sector' },
-  'Oceania': { area: 8525989, gdp: 2000000, color: 'text-cyan-500', name: 'Oceanic Sector' }
+  'Oceania': { area: 8525989, gdp: 2000000, color: 'text-cyan-500', name: 'Oceanic Sector' },
+  'Antarctica': { area: 14200000, gdp: 0, color: 'text-sky-300', name: 'Antarctic Sector' }
 };
