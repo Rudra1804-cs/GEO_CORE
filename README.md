@@ -47,3 +47,16 @@ A high-precision, interactive world geography game built with React, D3.js, and 
 
 ## 📊 Deployment
 The application is designed for full-precision desk surveillance but includes responsive breakpoints for mobile tactical oversight.
+
+View your app in AI Studio: https://ai.studio/apps/592b797d-1425-41e9-9d37-3360e09e9fe1
+
+## Run Locally
+
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
