@@ -40,6 +40,14 @@ export default function App() {
   const [focusedContinent, setFocusedContinent] = useState<string | null>(null);
   const [completionTime, setCompletionTime] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [showKashmirNotice, setShowKashmirNotice] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [playerName, setPlayerName] = useState('');
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number; date: string }[]>(() => {
+    const saved = localStorage.getItem('geogamer_leaderboard');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -92,9 +100,9 @@ export default function App() {
     return COUNTRIES.filter(c => !guessedIds.has(c.id)).sort((a, b) => b.area - a.area);
   }, [isFinished, guessedIds]);
 
-  // Start timer on first guess
+  // Start timer
   useEffect(() => {
-    if (startTime && !isFinished) {
+    if (hasStarted && startTime && !isFinished) {
       timerRef.current = setInterval(() => {
         if (gameMode === 'zen') {
           setTimeElapsed(Math.floor((Date.now() - startTime) / 1000));
@@ -133,6 +141,17 @@ export default function App() {
     if (e.key === 'Enter') {
       const normalized = inputValue.trim().toLowerCase();
       
+      if (!hasStarted && normalized !== 'india') {
+        setFeedback({ text: "Click 'PLAY' to start the mission", type: 'info' });
+        setTimeout(() => setFeedback(null), 2000);
+        return;
+      }
+
+      if (normalized === 'india') {
+        setShowKashmirNotice(true);
+        setTimeout(() => setShowKashmirNotice(false), 2000);
+      }
+
       if (normalized === 'final submit' || normalized === 'finish') {
         finishGame();
         setInputValue('');
@@ -174,28 +193,50 @@ export default function App() {
 
   const finishGame = () => {
     setIsFinished(true);
-    setShowResults(true);
     if (gameMode === 'zen') {
       setCompletionTime(timeElapsed);
     } else {
       setCompletionTime(selectedDuration * 60 - timeLeft);
     }
     if (timerRef.current) clearInterval(timerRef.current);
+    setShowNamePrompt(true);
+  };
+
+  const saveScoreAndShowResults = () => {
+    const finalName = playerName.trim() || 'Anonymous Agent';
+    const newEntry = {
+      name: finalName,
+      score: Math.floor(score),
+      date: new Date().toLocaleDateString()
+    };
+    const newLeaderboard = [newEntry, ...leaderboard].sort((a, b) => b.score - a.score).slice(0, 10);
+    setLeaderboard(newLeaderboard);
+    localStorage.setItem('geogamer_leaderboard', JSON.stringify(newLeaderboard));
+    setShowNamePrompt(false);
+    setShowResults(true);
+  };
+
+  const startGame = () => {
+    setHasStarted(true);
+    setStartTime(Date.now());
   };
 
   const resetGame = () => {
     setGuessedIds(new Set());
     setLastGuessedId(null);
     setStartTime(null);
+    setHasStarted(false);
     setTimeElapsed(0);
     setTimeLeft(selectedDuration * 60);
     setIsFinished(false);
     setShowResults(false);
+    setShowNamePrompt(false);
     setScore(0);
     setCompletionTime(null);
     setFocusedContinent(null);
     setInputValue('');
     setFeedback(null);
+    setPlayerName('');
   };
 
   useEffect(() => {
@@ -225,8 +266,8 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-6">
-          {!startTime && !isFinished && (
-            <div className="flex items-center gap-2">
+          {!hasStarted && !isFinished && (
+            <div className="flex items-center gap-3">
               <div className="flex bg-neutral-900/50 rounded-lg p-1 border border-neutral-800">
                 <button 
                   onClick={() => setGameMode('zen')}
@@ -259,6 +300,13 @@ export default function App() {
                   ))}
                 </select>
               )}
+
+              <button 
+                onClick={startGame}
+                className="px-6 py-1 bg-emerald-500 hover:bg-emerald-400 text-black rounded font-black text-[10px] uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
+              >
+                PLAY
+              </button>
             </div>
           )}
 
@@ -292,36 +340,50 @@ export default function App() {
         {/* Sidebar Controls */}
         <aside className="w-80 border-right border-neutral-800 flex flex-col bg-[#121212]/50">
           <div className="p-6 space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Input Country Name</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                <input 
-                  type="text"
-                  value={inputValue}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  disabled={isFinished}
-                  placeholder="Type country and press Enter..."
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
-                />
-                <AnimatePresence>
-                  {feedback && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className={cn(
-                        "absolute -bottom-8 left-0 right-0 text-center text-[10px] font-bold uppercase tracking-widest",
-                        feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
+            <AnimatePresence mode="wait">
+              {showKashmirNotice ? (
+               <motion.div
+                 key="notice"
+                 initial={{ opacity: 0, scale: 0.9 }}
+                 animate={{ opacity: 1, scale: 1 }}
+                 exit={{ opacity: 0, scale: 0.9 }}
+                 className="p-4 bg-emerald-600 text-white rounded-xl border border-emerald-400 shadow-lg text-center"
+               >
+                 <span className="font-black text-lg uppercase tracking-tighter">Kashmir belongs to India</span>
+               </motion.div>
+              ) : (
+                <motion.div key="search" className="space-y-2">
+                  <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Input Country Name</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                    <input 
+                      type="text"
+                      value={inputValue}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      disabled={isFinished || (!hasStarted && inputValue.toLowerCase() !== 'india')}
+                      placeholder={hasStarted ? "Type country and press Enter..." : "Click PLAY or type to test..."}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
+                    />
+                    <AnimatePresence>
+                      {feedback && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          className={cn(
+                            "absolute -bottom-8 left-0 right-0 text-center text-[10px] font-bold uppercase tracking-widest",
+                            feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
+                          )}
+                        >
+                          {feedback.text}
+                        </motion.div>
                       )}
-                    >
-                      {feedback.text}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="pt-4 space-y-4">
               <div className="p-4 rounded-xl bg-neutral-900/50 border border-neutral-800/50 space-y-3">
@@ -369,30 +431,53 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide">
-             <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#121212]/50 py-2">Recently Secured</label>
-             <div className="space-y-2">
-                {[...guessedIds].reverse().slice(0, 20).map(id => {
-                  const country = COUNTRIES.find(c => c.id === id);
-                  return (
-                    <motion.div 
-                      key={id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="flex items-center gap-3 p-2 rounded bg-neutral-900/30 border border-neutral-800/30 text-[11px]"
-                    >
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      <span className="flex-1 truncate">{country?.name}</span>
-                      <span className="text-[9px] text-neutral-600 font-mono">+{Math.floor((country?.area || 0) / 1000 * currentMultiplier)}</span>
-                    </motion.div>
-                  );
-                })}
-                {guessedIds.size === 0 && (
-                  <div className="text-center py-12 opacity-20">
-                    <Flag className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-[10px] uppercase font-mono tracking-widest">No territory identified</p>
-                  </div>
-                )}
+          <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-8">
+             <div>
+               <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#121212]/50 py-2">Recently Secured</label>
+               <div className="space-y-2">
+                  {[...guessedIds].reverse().slice(0, 10).map(id => {
+                    const country = COUNTRIES.find(c => c.id === id);
+                    return (
+                      <motion.div 
+                        key={id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-3 p-2 rounded bg-neutral-900/30 border border-neutral-800/30 text-[11px]"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                        <span className="flex-1 truncate">{country?.name}</span>
+                        <span className="text-[9px] text-neutral-600 font-mono">+{Math.floor((country?.area || 0) / 1000 * currentMultiplier)}</span>
+                      </motion.div>
+                    );
+                  })}
+                  {guessedIds.size === 0 && (
+                    <div className="text-center py-6 opacity-20">
+                      <Flag className="w-6 h-6 mx-auto mb-2" />
+                      <p className="text-[10px] uppercase font-mono tracking-widest">No territory identified</p>
+                    </div>
+                  )}
+               </div>
+             </div>
+
+             <div>
+               <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#121212]/50 py-2">Hall of Fame</label>
+               <div className="space-y-2">
+                 {leaderboard.map((entry, i) => (
+                   <div key={`${entry.name}-${i}`} className="flex items-center justify-between p-2 rounded bg-yellow-500/5 border border-yellow-500/10 text-[10px]">
+                     <div className="flex items-center gap-2">
+                       <span className="text-yellow-500 font-bold">#{i + 1}</span>
+                       <span className="text-neutral-400 font-bold truncate max-w-[80px]">{entry.name}</span>
+                     </div>
+                     <span className="text-neutral-200 font-mono">{entry.score.toLocaleString()}</span>
+                   </div>
+                 ))}
+                 {leaderboard.length === 0 && (
+                   <div className="text-center py-6 opacity-20">
+                     <Trophy className="w-6 h-6 mx-auto mb-2" />
+                     <p className="text-[10px] uppercase font-mono tracking-widest">No history recorded</p>
+                   </div>
+                 )}
+               </div>
              </div>
           </div>
         </aside>
@@ -422,6 +507,47 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        {/* Name Prompt Overlay */}
+        <AnimatePresence>
+          {showNamePrompt && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-100 bg-[#0a0a0a]/90 backdrop-blur-md flex items-center justify-center p-8"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="max-w-md w-full bg-[#121212] border border-emerald-500/30 p-8 rounded-3xl shadow-2xl text-center space-y-6"
+              >
+                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto text-emerald-500 border border-emerald-500/20">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Mission Success</h3>
+                  <p className="text-neutral-500 text-xs font-mono uppercase tracking-widest">Input your agent alias for the global record</p>
+                </div>
+                <input 
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && saveScoreAndShowResults()}
+                  autoFocus
+                  placeholder="AGENT NAME..."
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl py-4 px-6 text-xl font-black tracking-widest text-emerald-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50 uppercase text-center"
+                />
+                <button 
+                  onClick={saveScoreAndShowResults}
+                  className="w-full py-4 bg-emerald-500 text-black rounded-xl font-black uppercase tracking-widest transition-all hover:bg-emerald-400 active:scale-95 shadow-lg"
+                >
+                  Record Achievement
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Results Overlay */}
         <AnimatePresence>
