@@ -47,8 +47,8 @@ export default function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [showNamePrompt, setShowNamePrompt] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number; date: string; guessedIds: string[] }[]>(() => {
-    const saved = localStorage.getItem('geogamer_leaderboard');
+  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number; date: string; time: string; guessedIds: string[] }[]>(() => {
+    const saved = localStorage.getItem('geocore_leaderboard') || localStorage.getItem('geogamer_leaderboard');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -207,15 +207,18 @@ export default function App() {
 
   const saveScoreAndShowResults = () => {
     const finalName = playerName.trim() || 'Anonymous Agent';
+    const now = new Date();
     const newEntry = {
       name: finalName,
       score: Math.floor(score),
-      date: new Date().toLocaleDateString(),
+      date: now.toLocaleDateString(),
+      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       guessedIds: Array.from(guessedIds)
     };
-    const newLeaderboard = [newEntry, ...leaderboard].sort((a, b) => b.score - a.score).slice(0, 10);
+    // Sort latest to oldest
+    const newLeaderboard = [newEntry, ...leaderboard].slice(0, 50);
     setLeaderboard(newLeaderboard);
-    localStorage.setItem('geogamer_leaderboard', JSON.stringify(newLeaderboard));
+    localStorage.setItem('geocore_leaderboard', JSON.stringify(newLeaderboard));
     setShowNamePrompt(false);
     setShowRecordsView(true);
     setSelectedRecordIndex(0); // View the mission we just finished
@@ -225,7 +228,7 @@ export default function App() {
     e.stopPropagation();
     const newLeaderboard = leaderboard.filter((_, i) => i !== index);
     setLeaderboard(newLeaderboard);
-    localStorage.setItem('geogamer_leaderboard', JSON.stringify(newLeaderboard));
+    localStorage.setItem('geocore_leaderboard', JSON.stringify(newLeaderboard));
     if (selectedRecordIndex === index) {
       setSelectedRecordIndex(null);
     } else if (selectedRecordIndex !== null && selectedRecordIndex > index) {
@@ -279,7 +282,7 @@ export default function App() {
             <Globe className="w-5 h-5" />
           </div>
           <div className="hidden sm:block">
-            <h1 className="font-bold text-sm tracking-tight text-white uppercase">GeoGamer <span className="text-emerald-500">v2.0</span></h1>
+            <h1 className="font-bold text-sm tracking-tight text-white uppercase">GEO_CORE <span className="text-emerald-500">v2.0</span></h1>
             <p className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Global Landmass Retrieval Protocol</p>
           </div>
         </div>
@@ -319,13 +322,6 @@ export default function App() {
                   ))}
                 </select>
               )}
-
-              <button 
-                onClick={startGame}
-                className="px-6 py-1 bg-emerald-500 hover:bg-emerald-400 text-black rounded font-black text-[10px] uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
-              >
-                PLAY
-              </button>
             </div>
           )}
 
@@ -373,17 +369,29 @@ export default function App() {
             <AnimatePresence mode="wait">
               <motion.div key="search" className="space-y-2">
                 <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Input Country Name</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                    <input 
+                      type="text"
+                      value={inputValue}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      disabled={isFinished || (!hasStarted && inputValue.toLowerCase() !== 'india')}
+                      placeholder={hasStarted ? "Type country and press Enter..." : "Click PLAY or type to test..."}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
+                    />
+                  </div>
+                  {!hasStarted && !isFinished && (
+                    <button 
+                      onClick={startGame}
+                      className="px-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-lg font-black text-[10px] uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
+                    >
+                      PLAY
+                    </button>
+                  )}
+                </div>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                  <input 
-                    type="text"
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    disabled={isFinished || (!hasStarted && inputValue.toLowerCase() !== 'india')}
-                    placeholder={hasStarted ? "Type country and press Enter..." : "Click PLAY or type to test..."}
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
-                  />
                   <AnimatePresence>
                     {feedback && (
                       <motion.div 
@@ -516,14 +524,17 @@ export default function App() {
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                       {leaderboard.map((entry, i) => (
-                        <button 
-                          key={`${entry.name}-${i}`}
+                        <div 
+                          key={`${entry.name}-${i}-${entry.date}-${entry.time}`}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => setSelectedRecordIndex(i)}
+                          onKeyDown={(e) => e.key === 'Enter' && setSelectedRecordIndex(i)}
                           className={cn(
-                            "w-full flex items-center justify-between p-4 rounded-2xl transition-all border group relative overflow-hidden",
+                            "w-full flex items-center justify-between p-4 rounded-2xl transition-all border group relative overflow-hidden cursor-pointer outline-none",
                             selectedRecordIndex === i 
                               ? "bg-emerald-500/10 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]" 
-                              : "bg-neutral-900 border-neutral-800 hover:border-neutral-700"
+                              : "bg-neutral-900 border-neutral-800 hover:border-neutral-700 focus:border-emerald-500/30"
                           )}
                         >
                           <div className="flex items-center gap-4">
@@ -535,7 +546,7 @@ export default function App() {
                             </div>
                             <div className="text-left">
                               <h4 className={cn("text-sm font-black uppercase tracking-tighter", selectedRecordIndex === i ? "text-white" : "text-neutral-400 group-hover:text-neutral-200")}>{entry.name}</h4>
-                              <span className="text-[9px] text-neutral-600 font-mono uppercase">{entry.date} • {entry.guessedIds?.length || 0} Territories</span>
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">{entry.date} {entry.time} • {entry.guessedIds?.length || 0} Territories</span>
                             </div>
                           </div>
                           
@@ -548,12 +559,12 @@ export default function App() {
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
                               onClick={(e) => deleteRecord(e, i)}
-                              className="absolute right-4 p-2 text-neutral-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                              className="absolute right-4 p-2 text-neutral-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all z-10"
                             >
                               <Trash2 className="w-4 h-4" />
                             </motion.button>
                           </div>
-                        </button>
+                        </div>
                       ))}
                       {leaderboard.length === 0 && (
                         <div className="text-center py-24 opacity-10">
@@ -586,7 +597,7 @@ export default function App() {
                                   <MapIcon className="w-3 h-3" /> {leaderboard[selectedRecordIndex].guessedIds?.length || 0} Territories
                                 </div>
                                 <div className="text-[10px] font-mono uppercase text-neutral-500">
-                                  {leaderboard[selectedRecordIndex].date}
+                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time}
                                 </div>
                               </div>
                             </div>
