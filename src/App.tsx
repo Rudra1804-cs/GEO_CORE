@@ -18,7 +18,8 @@ import {
   RefreshCcw,
   Flag,
   Globe2,
-  LayoutDashboard
+  LayoutDashboard,
+  Trash2
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -218,6 +219,18 @@ export default function App() {
     setShowNamePrompt(false);
     setShowRecordsView(true);
     setSelectedRecordIndex(0); // View the mission we just finished
+  };
+
+  const deleteRecord = (e: React.MouseEvent, index: number) => {
+    e.stopPropagation();
+    const newLeaderboard = leaderboard.filter((_, i) => i !== index);
+    setLeaderboard(newLeaderboard);
+    localStorage.setItem('geogamer_leaderboard', JSON.stringify(newLeaderboard));
+    if (selectedRecordIndex === index) {
+      setSelectedRecordIndex(null);
+    } else if (selectedRecordIndex !== null && selectedRecordIndex > index) {
+      setSelectedRecordIndex(selectedRecordIndex - 1);
+    }
   };
 
   const startGame = () => {
@@ -507,7 +520,7 @@ export default function App() {
                           key={`${entry.name}-${i}`}
                           onClick={() => setSelectedRecordIndex(i)}
                           className={cn(
-                            "w-full flex items-center justify-between p-4 rounded-2xl transition-all border group",
+                            "w-full flex items-center justify-between p-4 rounded-2xl transition-all border group relative overflow-hidden",
                             selectedRecordIndex === i 
                               ? "bg-emerald-500/10 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]" 
                               : "bg-neutral-900 border-neutral-800 hover:border-neutral-700"
@@ -515,18 +528,30 @@ export default function App() {
                         >
                           <div className="flex items-center gap-4">
                             <div className={cn(
-                              "w-8 h-8 rounded-full flex items-center justify-center font-black text-xs",
-                              selectedRecordIndex === i ? "bg-emerald-500 text-black" : "bg-neutral-800 text-neutral-500"
+                              "w-8 h-8 rounded-full flex items-center justify-center font-black text-xs transition-colors",
+                              selectedRecordIndex === i ? "bg-emerald-500 text-black" : "bg-neutral-800 text-neutral-500 group-hover:bg-neutral-700"
                             )}>
                               {i + 1}
                             </div>
                             <div className="text-left">
-                              <h4 className={cn("text-sm font-black uppercase tracking-tighter", selectedRecordIndex === i ? "text-white" : "text-neutral-400")}>{entry.name}</h4>
-                              <span className="text-[9px] text-neutral-600 font-mono uppercase">{entry.date}</span>
+                              <h4 className={cn("text-sm font-black uppercase tracking-tighter", selectedRecordIndex === i ? "text-white" : "text-neutral-400 group-hover:text-neutral-200")}>{entry.name}</h4>
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">{entry.date} • {entry.guessedIds?.length || 0} Territories</span>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className={cn("text-base font-black leading-none", selectedRecordIndex === i ? "text-emerald-400" : "text-neutral-400")}>{entry.score.toLocaleString()}</div>
+                          
+                          <div className="flex items-center gap-3">
+                            <div className="text-right transition-transform group-hover:-translate-x-8">
+                              <div className={cn("text-base font-black leading-none", selectedRecordIndex === i ? "text-emerald-400" : "text-neutral-400")}>{entry.score.toLocaleString()}</div>
+                            </div>
+                            
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => deleteRecord(e, i)}
+                              className="absolute right-4 p-2 text-neutral-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </motion.button>
                           </div>
                         </button>
                       ))}
