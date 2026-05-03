@@ -154,7 +154,7 @@ export const COUNTRIES: CountryData[] = [
   { id: "678", name: "Sao Tome and Principe", aliases: ["stp"], area: 964, gdp: 600, continent: 'Africa' },
   { id: "682", name: "Saudi Arabia", aliases: ["sau", "ksa"], area: 2149690, gdp: 1110000, continent: 'Asia' },
   { id: "686", name: "Senegal", aliases: ["sen"], area: 196722, gdp: 32000, continent: 'Africa' },
-  { id: "688", name: "Serbia", aliases: ["srb"], area: 88361, gdp: 82000, continent: 'Europe' },
+  { id: "688", name: "Serbia", aliases: ["srb", "kosovo"], area: 88361, gdp: 82000, continent: 'Europe' },
   { id: "690", name: "Seychelles", aliases: ["syc"], area: 452, gdp: 2100, continent: 'Africa' },
   { id: "694", name: "Sierra Leone", aliases: ["sle", "sl"], area: 71740, gdp: 4000, continent: 'Africa' },
   { id: "702", name: "Singapore", aliases: ["sgp"], area: 719, gdp: 530000, continent: 'Asia' },

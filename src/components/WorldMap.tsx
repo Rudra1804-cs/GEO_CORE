@@ -65,10 +65,14 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       // Somaliland mapping to Somalia (706)
       countries.features = countries.features.map((feature: any) => {
         if (feature.id === "732") feature.id = "504"; 
-        if (feature.id === "383") feature.id = "688";
+        
+        // Handle Kosovo (mapping to Serbia 688)
+        const name = feature.properties?.name || '';
+        if (feature.id === "383" || name === "Kosovo") {
+          feature.id = "688";
+        }
         
         // Handle Somaliland (id 000 or specific name in some datasets)
-        const name = feature.properties?.name || '';
         if (feature.id === "000" || name === "Somaliland" || name.includes("Somalialand")) {
           feature.id = "706"; // Map to Somalia
         }
