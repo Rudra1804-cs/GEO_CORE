@@ -1,4 +1,4 @@
-# Global Surveillance & Retrieval Protocol (Geo-Guesser)
+# Global Surveillance & Retrieval Protocol (GEO_CORE)
 
 A high-precision, interactive world geography game built with React, D3.js, and Tailwind CSS. The application features a "cyber-industrial" tactical aesthetic, designed for rapid territorial identification and sector analysis.
 
