@@ -47,7 +47,7 @@ export default function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [showNamePrompt, setShowNamePrompt] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number; date: string; time: string; guessedIds: string[] }[]>(() => {
+  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[] }[]>(() => {
     const saved = localStorage.getItem('geocore_leaderboard') || localStorage.getItem('geogamer_leaderboard');
     return saved ? JSON.parse(saved) : [];
   });
@@ -144,10 +144,9 @@ export default function App() {
     if (e.key === 'Enter') {
       const normalized = inputValue.trim().toLowerCase();
       
-      if (!hasStarted && normalized !== 'india') {
-        setFeedback({ text: "Click 'PLAY' to start the mission", type: 'info' });
-        setTimeout(() => setFeedback(null), 2000);
-        return;
+      if (!hasStarted) {
+        setHasStarted(true);
+        setStartTime(Date.now());
       }
 
       if (normalized === 'india') {
@@ -213,6 +212,7 @@ export default function App() {
       score: Math.floor(score),
       date: now.toLocaleDateString(),
       time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      duration: completionTime || 0,
       guessedIds: Array.from(guessedIds)
     };
     // Sort latest to oldest
@@ -377,19 +377,11 @@ export default function App() {
                       value={inputValue}
                       onChange={handleInputChange}
                       onKeyDown={handleKeyDown}
-                      disabled={isFinished || (!hasStarted && inputValue.toLowerCase() !== 'india')}
-                      placeholder={hasStarted ? "Type country and press Enter..." : "Click PLAY or type to test..."}
+                      disabled={isFinished}
+                      placeholder="Type country and press Enter..."
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
                     />
                   </div>
-                  {!hasStarted && !isFinished && (
-                    <button 
-                      onClick={startGame}
-                      className="px-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-lg font-black text-[10px] uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
-                    >
-                      PLAY
-                    </button>
-                  )}
                 </div>
                 <div className="relative">
                   <AnimatePresence>
@@ -597,7 +589,7 @@ export default function App() {
                                   <MapIcon className="w-3 h-3" /> {leaderboard[selectedRecordIndex].guessedIds?.length || 0} Territories
                                 </div>
                                 <div className="text-[10px] font-mono uppercase text-neutral-500">
-                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time}
+                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time} • Completed in {formatTime(leaderboard[selectedRecordIndex].duration || 0)}
                                 </div>
                               </div>
                             </div>
