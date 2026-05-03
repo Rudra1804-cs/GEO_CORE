@@ -36,6 +36,8 @@ export default function App() {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [showRecordsView, setShowRecordsView] = useState(false);
+  const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [focusedContinent, setFocusedContinent] = useState<string | null>(null);
   const [completionTime, setCompletionTime] = useState<number | null>(null);
@@ -44,7 +46,7 @@ export default function App() {
   const [hasStarted, setHasStarted] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [showNamePrompt, setShowNamePrompt] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number; date: string }[]>(() => {
+  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number; date: string; guessedIds: string[] }[]>(() => {
     const saved = localStorage.getItem('geogamer_leaderboard');
     return saved ? JSON.parse(saved) : [];
   });
@@ -207,13 +209,15 @@ export default function App() {
     const newEntry = {
       name: finalName,
       score: Math.floor(score),
-      date: new Date().toLocaleDateString()
+      date: new Date().toLocaleDateString(),
+      guessedIds: Array.from(guessedIds)
     };
     const newLeaderboard = [newEntry, ...leaderboard].sort((a, b) => b.score - a.score).slice(0, 10);
     setLeaderboard(newLeaderboard);
     localStorage.setItem('geogamer_leaderboard', JSON.stringify(newLeaderboard));
     setShowNamePrompt(false);
-    setShowResults(true);
+    setShowRecordsView(true);
+    setSelectedRecordIndex(0); // View the mission we just finished
   };
 
   const startGame = () => {
@@ -226,6 +230,8 @@ export default function App() {
     setLastGuessedId(null);
     setStartTime(null);
     setHasStarted(false);
+    setShowRecordsView(false);
+    setSelectedRecordIndex(null);
     setTimeElapsed(0);
     setTimeLeft(selectedDuration * 60);
     setIsFinished(false);
@@ -310,6 +316,17 @@ export default function App() {
             </div>
           )}
 
+          <button 
+                onClick={() => setShowRecordsView(!showRecordsView)}
+                className={cn(
+                  "px-4 py-1.5 rounded font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
+                  showRecordsView ? "bg-emerald-500 text-black shadow-lg" : "bg-neutral-800 text-neutral-400 hover:text-white"
+                )}
+              >
+                <Trophy className="w-3 h-3" />
+                {showRecordsView ? "BACK TO MAP" : "RECORDS"}
+          </button>
+
           <div className="flex flex-col items-end min-w-[80px]">
             <span className="text-[10px] text-neutral-500 font-mono uppercase">Protocol Time</span>
             <div className="flex items-center gap-2 text-white font-mono">
@@ -341,48 +358,36 @@ export default function App() {
         <aside className="w-80 border-right border-neutral-800 flex flex-col bg-[#121212]/50">
           <div className="p-6 space-y-6">
             <AnimatePresence mode="wait">
-              {showKashmirNotice ? (
-               <motion.div
-                 key="notice"
-                 initial={{ opacity: 0, scale: 0.9 }}
-                 animate={{ opacity: 1, scale: 1 }}
-                 exit={{ opacity: 0, scale: 0.9 }}
-                 className="p-4 bg-emerald-600 text-white rounded-xl border border-emerald-400 shadow-lg text-center"
-               >
-                 <span className="font-black text-lg uppercase tracking-tighter">Kashmir belongs to India</span>
-               </motion.div>
-              ) : (
-                <motion.div key="search" className="space-y-2">
-                  <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Input Country Name</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-                    <input 
-                      type="text"
-                      value={inputValue}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      disabled={isFinished || (!hasStarted && inputValue.toLowerCase() !== 'india')}
-                      placeholder={hasStarted ? "Type country and press Enter..." : "Click PLAY or type to test..."}
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
-                    />
-                    <AnimatePresence>
-                      {feedback && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 10 }}
-                          className={cn(
-                            "absolute -bottom-8 left-0 right-0 text-center text-[10px] font-bold uppercase tracking-widest",
-                            feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
-                          )}
-                        >
-                          {feedback.text}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </motion.div>
-              )}
+              <motion.div key="search" className="space-y-2">
+                <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Input Country Name</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                  <input 
+                    type="text"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    disabled={isFinished || (!hasStarted && inputValue.toLowerCase() !== 'india')}
+                    placeholder={hasStarted ? "Type country and press Enter..." : "Click PLAY or type to test..."}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
+                  />
+                  <AnimatePresence>
+                    {feedback && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className={cn(
+                          "absolute -bottom-8 left-0 right-0 text-center text-[10px] font-bold uppercase tracking-widest",
+                          feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
+                        )}
+                      >
+                        {feedback.text}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
             </AnimatePresence>
 
             <div className="pt-4 space-y-4">
@@ -431,11 +436,11 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-8">
+          <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-4">
              <div>
                <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#121212]/50 py-2">Recently Secured</label>
                <div className="space-y-2">
-                  {[...guessedIds].reverse().slice(0, 10).map(id => {
+                  {[...guessedIds].reverse().slice(0, 15).map(id => {
                     const country = COUNTRIES.find(c => c.id === id);
                     return (
                       <motion.div 
@@ -459,53 +464,173 @@ export default function App() {
                </div>
              </div>
 
-             <div>
-               <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#121212]/50 py-2">Hall of Fame</label>
-               <div className="space-y-2">
-                 {leaderboard.map((entry, i) => (
-                   <div key={`${entry.name}-${i}`} className="flex items-center justify-between p-2 rounded bg-yellow-500/5 border border-yellow-500/10 text-[10px]">
-                     <div className="flex items-center gap-2">
-                       <span className="text-yellow-500 font-bold">#{i + 1}</span>
-                       <span className="text-neutral-400 font-bold truncate max-w-[80px]">{entry.name}</span>
-                     </div>
-                     <span className="text-neutral-200 font-mono">{entry.score.toLocaleString()}</span>
-                   </div>
-                 ))}
-                 {leaderboard.length === 0 && (
-                   <div className="text-center py-6 opacity-20">
-                     <Trophy className="w-6 h-6 mx-auto mb-2" />
-                     <p className="text-[10px] uppercase font-mono tracking-widest">No history recorded</p>
-                   </div>
-                 )}
-               </div>
-             </div>
+             <AnimatePresence>
+               {showKashmirNotice && (
+                 <motion.div
+                   initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                   animate={{ opacity: 1, scale: 1, y: 0 }}
+                   exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                   className="p-8 bg-emerald-600 text-white rounded-2xl border-2 border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.3)] text-center mt-auto"
+                 >
+                   <span className="font-black text-xl leading-tight uppercase tracking-tighter block mb-1">Kashmir</span>
+                   <span className="text-[10px] font-mono uppercase tracking-[0.2em] opacity-80">Belongs to India</span>
+                 </motion.div>
+               )}
+             </AnimatePresence>
           </div>
         </aside>
 
         {/* Map Area */}
         <section className="flex-1 p-6 flex flex-col gap-6">
-          <div className="flex-1 relative">
-            <WorldMap 
-              guessedIds={guessedIds} 
-              highlightedId={lastGuessedId} 
-              isFinished={isFinished} 
-              focusedContinent={focusedContinent}
-            />
-           
-            {/* Interactive Overlays */}
-            <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-              <div className="bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-3 rounded-lg flex items-center gap-4 shadow-xl">
-                 <div className="flex items-center gap-2">
-                   <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-                   <span className="text-[10px] font-mono uppercase">Secured</span>
-                 </div>
-                 <div className="flex items-center gap-2">
-                   <div className="w-3 h-3 rounded-sm bg-[#262626]" />
-                   <span className="text-[10px] font-mono uppercase">Unknown</span>
-                 </div>
-              </div>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {showRecordsView ? (
+              <motion.div 
+                key="records"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="flex-1 bg-[#0a0a0a] border border-neutral-800 rounded-3xl overflow-hidden flex flex-col"
+              >
+                <div className="flex-1 flex overflow-hidden">
+                  {/* Records List */}
+                  <div className="w-1/3 border-r border-neutral-800 flex flex-col bg-[#121212]/50">
+                    <div className="p-6 border-b border-neutral-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Trophy className="w-4 h-4 text-emerald-500" />
+                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">Mission Logs</h2>
+                      </div>
+                      <p className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Archive of previous territorial runs</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                      {leaderboard.map((entry, i) => (
+                        <button 
+                          key={`${entry.name}-${i}`}
+                          onClick={() => setSelectedRecordIndex(i)}
+                          className={cn(
+                            "w-full flex items-center justify-between p-4 rounded-2xl transition-all border group",
+                            selectedRecordIndex === i 
+                              ? "bg-emerald-500/10 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.1)]" 
+                              : "bg-neutral-900 border-neutral-800 hover:border-neutral-700"
+                          )}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center font-black text-xs",
+                              selectedRecordIndex === i ? "bg-emerald-500 text-black" : "bg-neutral-800 text-neutral-500"
+                            )}>
+                              {i + 1}
+                            </div>
+                            <div className="text-left">
+                              <h4 className={cn("text-sm font-black uppercase tracking-tighter", selectedRecordIndex === i ? "text-white" : "text-neutral-400")}>{entry.name}</h4>
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">{entry.date}</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={cn("text-base font-black leading-none", selectedRecordIndex === i ? "text-emerald-400" : "text-neutral-400")}>{entry.score.toLocaleString()}</div>
+                          </div>
+                        </button>
+                      ))}
+                      {leaderboard.length === 0 && (
+                        <div className="text-center py-24 opacity-10">
+                          <Trophy className="w-12 h-12 mx-auto mb-4" />
+                          <p className="text-[10px] uppercase font-mono tracking-widest">No history found</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Record Details / Analysis */}
+                  <div className="flex-1 flex flex-col bg-[#0a0a0a]">
+                    <AnimatePresence mode="wait">
+                      {selectedRecordIndex !== null && leaderboard[selectedRecordIndex] ? (
+                        <motion.div 
+                          key={selectedRecordIndex}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex-1 flex flex-col p-8 gap-8"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <h3 className="text-4xl font-black text-white uppercase tracking-tighter">{leaderboard[selectedRecordIndex].name}</h3>
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-neutral-500">
+                                  <Trophy className="w-3 h-3" /> {leaderboard[selectedRecordIndex].score.toLocaleString()} Points
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-neutral-500">
+                                  <MapIcon className="w-3 h-3" /> {leaderboard[selectedRecordIndex].guessedIds?.length || 0} Territories
+                                </div>
+                                <div className="text-[10px] font-mono uppercase text-neutral-500">
+                                  {leaderboard[selectedRecordIndex].date}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex-1 relative bg-neutral-900/50 rounded-3xl border border-neutral-800/50 overflow-hidden shadow-inner">
+                             <WorldMap 
+                               guessedIds={new Set(leaderboard[selectedRecordIndex].guessedIds || [])}
+                               highlightedId={null}
+                               isFinished={true}
+                               focusedContinent={null}
+                             />
+                             <div className="absolute top-4 right-4 bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-4 rounded-xl shadow-xl">
+                               <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest mb-3">Territorial Analysis</div>
+                               <div className="space-y-2">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                                    <span className="text-[11px] font-bold text-white uppercase">{leaderboard[selectedRecordIndex].guessedIds?.length || 0} Captured</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-neutral-800" />
+                                    <span className="text-[11px] font-bold text-neutral-500 uppercase">{COUNTRIES.length - (leaderboard[selectedRecordIndex].guessedIds?.length || 0)} Missing</span>
+                                  </div>
+                               </div>
+                             </div>
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-12 opacity-20">
+                          <LayoutDashboard className="w-16 h-16 mb-4" />
+                          <h3 className="text-xl font-black uppercase tracking-tighter">Decline Data Pending</h3>
+                          <p className="text-[10px] font-mono uppercase tracking-widest">Select a log entry to inspect mission parameters</p>
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="map"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 relative"
+              >
+                <WorldMap 
+                  guessedIds={guessedIds} 
+                  highlightedId={lastGuessedId} 
+                  isFinished={isFinished} 
+                  focusedContinent={focusedContinent}
+                />
+              
+                {/* Interactive Overlays */}
+                <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                  <div className="bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-3 rounded-lg flex items-center gap-4 shadow-xl">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+                      <span className="text-[10px] font-mono uppercase">Secured</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-sm bg-[#262626]" />
+                      <span className="text-[10px] font-mono uppercase">Unknown</span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
 
         {/* Name Prompt Overlay */}
