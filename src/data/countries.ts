@@ -196,7 +196,6 @@ export const COUNTRIES: CountryData[] = [
   { id: "887", name: "Yemen", aliases: ["yem"], area: 527968, gdp: 20000, continent: 'Asia' },
   { id: "894", name: "Zambia", aliases: ["zmb"], area: 752618, gdp: 32000, continent: 'Africa' },
   { id: "716", name: "Zimbabwe", aliases: ["zwe"], area: 390757, gdp: 35000, continent: 'Africa' },
-  { id: "304", name: "Greenland", aliases: ["grl"], area: 2166086, gdp: 3500, continent: 'North America' },
   { id: "158", name: "Taiwan", aliases: ["twn"], area: 36193, gdp: 800000, continent: 'Asia' },
   { id: "344", name: "Hong Kong", aliases: ["hkg"], area: 1106, gdp: 400000, continent: 'Asia' },
   { id: "446", name: "Macao", aliases: ["mac"], area: 30, gdp: 55000, continent: 'Asia' },

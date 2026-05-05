@@ -326,7 +326,13 @@ export default function App() {
           )}
 
           <button 
-                onClick={() => setShowRecordsView(!showRecordsView)}
+                onClick={() => {
+                  if (showRecordsView) {
+                    resetGame();
+                  } else {
+                    setShowRecordsView(true);
+                  }
+                }}
                 className={cn(
                   "px-4 py-1.5 rounded font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
                   showRecordsView ? "bg-emerald-500 text-black shadow-lg" : "bg-neutral-800 text-neutral-400 hover:text-white"
