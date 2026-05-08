@@ -12,7 +12,8 @@ GEO-CORE is a high-precision, interactive world geography simulation designed fo
  <img width="1710" height="937" alt="Screenshot 2026-05-08 at 12 33 09" src="https://github.com/user-attachments/assets/e35ab57e-fe3c-467b-b871-72b6bb4bc6f8" />
 
 * **[Active Identification Mission - Tactical Feedback]**
- <img width="1710" height="1107" alt="Screenshot 2026-05-08 at 12 33 33" src="https://github.com/user-attachments/assets/db3239d7-09c7-4c70-80bc-d58f25a4f4f0" />
+ <img width="1705" height="971" alt="Screenshot 2026-05-08 at 12 33 33" src="https://github.com/user-attachments/assets/4d81990b-90c2-4ebb-9af4-99376c1e129e" />
+
 
 * **[Intelligence Archive - Mission Logs & Leaderboard]**
  <img width="1710" height="911" alt="Screenshot 2026-05-08 at 12 34 06" src="https://github.com/user-attachments/assets/ecf6f489-d60e-42ff-b9de-4b68560d9c27" />
