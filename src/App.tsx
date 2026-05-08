@@ -47,7 +47,8 @@ import {
   serverTimestamp,
   doc,
   getDocFromServer,
-  deleteDoc
+  deleteDoc,
+  where
 } from 'firebase/firestore';
 
 enum OperationType {
@@ -113,7 +114,8 @@ export default function App() {
   const [selectedExpandedCountryId, setSelectedExpandedCountryId] = useState<string | null>(null);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[]; userId?: string }[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[]; userId?: string; userEmail?: string }[]>([]);
+  const isAdmin = user?.email === 'f20240342@dubai.bits-pilani.ac.in';
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const typeSoundPool = useRef<HTMLAudioElement[]>([]);
@@ -128,8 +130,28 @@ export default function App() {
       }
     });
 
-    // Leaderboard Listener
-    const q = query(collection(db, 'leaderboard'), orderBy('createdAt', 'desc'), limit(50));
+    return () => unsubscribeAuth();
+  }, [playerName]);
+
+  useEffect(() => {
+    if (!user) {
+      setLeaderboard([]);
+      return;
+    }
+
+    // Leaderboard Listener - Filter by user unless admin
+    let q;
+    if (isAdmin) {
+      q = query(collection(db, 'leaderboard'), orderBy('createdAt', 'desc'), limit(100));
+    } else {
+      q = query(
+        collection(db, 'leaderboard'), 
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'), 
+        limit(50)
+      );
+    }
+
     const unsubscribeLeaderboard = onSnapshot(q, (snapshot) => {
       const entries = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -140,23 +162,8 @@ export default function App() {
       handleFirestoreError(error, OperationType.LIST, 'leaderboard');
     });
 
-    // Connection Test
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
-        }
-      }
-    };
-    testConnection();
-
-    return () => {
-      unsubscribeAuth();
-      unsubscribeLeaderboard();
-    };
-  }, []);
+    return () => unsubscribeLeaderboard();
+  }, [user, isAdmin]);
 
   const handleLogin = async () => {
     try {
@@ -391,6 +398,7 @@ export default function App() {
       duration: completionTime || 0,
       guessedIds: Array.from(guessedIds),
       userId: user?.uid || null,
+      userEmail: user?.email || null,
       createdAt: serverTimestamp()
     };
 
@@ -755,11 +763,29 @@ export default function App() {
                   {/* Records List */}
                   <div className="w-1/3 border-r border-neutral-800 flex flex-col bg-[#121212]/50">
                     <div className="p-6 border-b border-neutral-800">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Trophy className="w-4 h-4 text-emerald-500" />
-                          <h2 className="text-xl font-black text-white uppercase tracking-tighter">Mission Logs</h2>
+                      <div className="flex items-center justify-between mb-8">
+                        <div>
+                          <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">Mission Archive</h2>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] text-emerald-500/80 font-mono uppercase tracking-widest">
+                              {isAdmin ? 'Global Intelligence Access Active' : 'Personal Records Secure'}
+                            </span>
+                          </div>
                         </div>
+                        <button 
+                          onClick={() => {
+                            setShowRecordsView(false);
+                            if (isFinished) setShowResults(true);
+                          }}
+                          className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl hover:bg-neutral-800 transition-colors"
+                        >
+                          <XCircle className="w-5 h-5 text-neutral-500" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-emerald-500" />
+                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">Mission Logs</h2>
                       </div>
                       <p className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Archive of previous territorial runs</p>
                     </div>
@@ -795,8 +821,13 @@ export default function App() {
                                 </button>
                               )}
                             </div>
-                            <div className="text-left">
-                              <h4 className={cn("text-sm font-black uppercase tracking-tighter", selectedRecordIndex === i ? "text-white" : "text-neutral-400 group-hover:text-neutral-200")}>{entry.name}</h4>
+                            <div className="text-left flex-1">
+                              <h4 className={cn("text-sm font-black uppercase tracking-tighter flex items-center gap-2", selectedRecordIndex === i ? "text-white" : "text-neutral-400 group-hover:text-neutral-200")}>
+                                {entry.name}
+                                {isAdmin && entry.userEmail && (
+                                  <span className="text-[8px] font-mono text-neutral-600 lowercase opacity-60">[{entry.userEmail}]</span>
+                                )}
+                              </h4>
                               <span className="text-[9px] text-neutral-600 font-mono uppercase">{entry.date} {entry.time} • {entry.guessedIds?.length || 0} Territories</span>
                             </div>
                           </div>
