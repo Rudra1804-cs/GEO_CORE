@@ -1,49 +1,62 @@
-# Global Surveillance & Retrieval Protocol (Geo-Guesser)
+# GEO-CORE: Global Surveillance & Identification Protocol
 
-A high-precision, interactive world geography game built with React, D3.js, and Tailwind CSS. The application features a "cyber-industrial" tactical aesthetic, designed for rapid territorial identification and sector analysis.
+**Live Mission Link:** [https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app](https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app)
 
-## 🚀 Core Features
+GEO-CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data to track global dominance.
 
-### 1. Tactical Gameplay Engine
-- **Predictive Identification**: Input country names or ISO codes to "reclaim" territories.
-- **Dynamic Feedback**: Visual confirmation on the world map with custom state transitions (Standard -> Identified -> Highlighted).
-- **Global Metrics**: Real-time tracking of:
-    - **Total Entities Identified** (Count)
-    - **Wealth Capture** (Global GDP percentage)
-    - **Area Coverage** (Global Landmass percentage)
+---
 
-### 2. Sector Analysis Mode (Continent Review)
-- **Precision Zooming**: After the mission ends (or via selection), specific continental sectors can be deployed for detailed surveillance.
-- **Dynamic Framing Logic**: Individual continents feature custom padding and framing to ensure perfect visibility:
-    - **North America**: Enhanced focus specifically to capture the Caribbean and Central American archipelagos.
-    - **Europe/Asia/Africa/Oceania**: Tailored zoom levels for optimal geometric representation.
-- **Micro-Stats Analysis**: View specific GDP and Area metrics for the selected continent.
+## 📸 Mission Briefing (Screenshots)
 
-### 3. Advanced Map Logistics
-- **Territorial Mapping & Geopolitical Handling**:
-    - **Somaliland** maps to **Somalia**.
-    - **Kosovo** maps to **Serbia**.
-    - **Northern Cyprus** maps to **Cyprus**.
-    - **Western Sahara** maps to **Morocco**.
-- **Interactive Tooltips**: High-speed, lightweight tooltips provide instant sector naming upon hover during review.
-- **Dynamic SVG Zoom/Pan**: Full zoom and pan capabilities across the global projection.
+* **[PLACEHOLDER: Main Interface - The Global Command Center]**
+* **[PLACEHOLDER: Active Identification Mission - Tactical Feedback]**
+* **[PLACEHOLDER: Intelligence Archive - Mission Logs & Leaderboard]**
+* **[PLACEHOLDER: Final Debriefing - Territorial Analysis Report]**
 
-### 4. Precision Reporting
-- **Identified List**: A detailed manifest of all reclaimed sectors within a continent.
-- **Missing Coverage**: Clear, high-contrast list of sectors still under neutral/unidentified status.
-- **Efficiency Metric**: Calculated as `(Identified Sectors / Total Regional Sectors) * 100`.
+---
 
-### 5. Tactical Aesthetic
-- **Cyber-Industrial UI**: Minimalist neutral-900 palette with emerald-500 highlights.
-- **Glassmorphism Overlays**: Tactical readouts use backdrop-blur and semi-transparent layers.
-- **Atmospheric Pulsing**: Active "Surveillance" indicators to simulate live atmospheric capture.
+## 🚀 Advanced Feature Suite
 
-## 🛠 Technical Stack
+### 1. Tactical Identification Engine
+- **Predictive Data Entry**: Input country names or ISO identifiers to "reclaim" territories in real-time.
+- **Dynamic Projections**: Custom D3.js-powered Mercator projections with intelligent framing and continent-specific focus.
+- **Sector Feedback**: High-contrast visual confirmation of captured sectors vs. unidentified territories.
+
+### 2. Firebase Intelligence Integration
+- **Secure Authentication**: Operatives can sync data via Google Biometric (Auth) to preserve mission history.
+- **Centralized Mission Logs**: Cloud-synchronized leaderboard with persistent record-keeping.
+- **Admin Oversight (Level 4 Clearing)**: Master access for verified officers to monitor global data cross-referenced by operative email.
+- **Data Integrity**: Intelligent prevention of duplicate record entries to ensure mission log purity.
+
+### 3. Capital Proximity Radar (CPR)
+- **Precision Guidance**: Brief visual markers indicating the capital city of target nations.
+- **Stealth-Fade Logic**: Pins automatically de-materialize after 2 seconds of exposure to maintain mission difficulty.
+- **Miniaturized Visuals**: Scaled-down markers to prevent obstruction of territorial borders.
+
+### 4. Sector Analysis Mode
+- **Post-Mission Review**: Switch to analysis mode to zoom into specific continental sectors.
+- **Micro-Stats Analysis**: Real-time calculation of Wealth Capture (GDP) and Area Coverage (Landmass) at a global and regional scale.
+- **Interactive Tooltips**: High-speed, lightweight tooltips for instant sector naming during analysis.
+
+### 5. High-Fidelity UI/UX
+- **Cyber-Industrial Aesthetic**: Neutral-900 tactical palette with Emerald-500 feedback accents.
+- **Immersive Audio**: Typewriter sound effects and tactical audio cues (optional/toggle).
+- **Responsive Command**: Full layout stability with `ResizeObserver` and `requestAnimationFrame` for buttery-smooth map scaling.
+
+---
+
+## 🛠 Strategic Tech Stack
+
 - **Framework**: React 18+ (Vite)
-- **Visuals**: D3.js (TopoJSON, Geo-Projections)
-- **Animations**: Framer Motion
+- **Database/Auth**: Firebase Firestore & Authentication
+- **Geodata Visuals**: D3.js (TopoJSON, Geo-Projections)
+- **Motion Kinetics**: Framer Motion / Motion for React
 - **Styling**: Tailwind CSS
-- **Icons**: Lucide React
+- **Vector Assets**: Lucide React
 
-## 📊 Deployment
-The application is designed for full-precision desk surveillance but includes responsive breakpoints for mobile tactical oversight.
+---
+
+## 📡 Operational Notes
+*   This protocol is optimized for desktop surveillance windows.
+*   Mobile tactical deployment is supported via responsive breakpoints.
+*   All mission data is stored in the **GEO-CORE** central intelligence database.
