@@ -10,6 +10,9 @@ export interface CountryData {
   area: number; // in sq km
   gdp: number; // in millions USD
   continent: 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania' | 'Antarctica';
+  capital?: string;
+  capitalCoords?: { lat: number; lng: number };
+  facts?: string[];
 }
 
 export interface GameState {

@@ -10,24 +10,130 @@ interface WorldMapProps {
   highlightedId: string | null;
   isFinished: boolean;
   focusedContinent?: string | null;
+  onCountryClick?: (id: string) => void;
 }
 
-export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContinent }: WorldMapProps) {
+export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContinent, onCountryClick }: WorldMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const countriesDataRef = useRef<any>(null);
   const isFinishedRef = useRef(isFinished);
+  const projectionRef = useRef<d3.GeoProjection | null>(null);
   const [tooltip, setTooltip] = useState<{ name: string; x: number; y: number } | null>(null);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
     isFinishedRef.current = isFinished;
   }, [isFinished]);
 
+  // Efficient state updates without re-centering
+  const updateMapColors = () => {
+    if (!gRef.current) return;
+
+    // Update path colors
+    gRef.current.selectAll('path')
+      .transition()
+      .duration(300)
+      .attr('fill', (d: any) => {
+        const id = String(d.id).padStart(3, '0');
+        if (guessedIds.has(id)) return '#4ade80';
+        if (highlightedId === id) return '#facc15';
+        if (isFinishedRef.current && !guessedIds.has(id)) return '#ef444433';
+        return '#262626';
+      })
+      .attr('stroke', (d: any) => {
+        const id = String(d.id).padStart(3, '0');
+        if (guessedIds.has(id)) return '#059669';
+        if (isFinishedRef.current && !guessedIds.has(id)) return '#ef444466';
+        return '#404040';
+      });
+
+    // Handle Pins
+    gRef.current.selectAll('.capital-pin').remove();
+    
+    if (highlightedId && containerRef.current && projectionRef.current) {
+      const country = COUNTRIES.find(c => c.id === highlightedId);
+      if (country && country.capitalCoords) {
+        const coords = projectionRef.current([country.capitalCoords.lng, country.capitalCoords.lat]);
+        if (coords) {
+          const pinGroup = gRef.current.append('g')
+            .attr('class', 'capital-pin')
+            .attr('transform', `translate(${coords[0]}, ${coords[1]})`);
+
+          // Pin Pulse
+          pinGroup.append('circle')
+            .attr('r', 4)
+            .attr('fill', '#3b82f6')
+            .attr('opacity', 0.4)
+            .append('animate')
+            .attr('attributeName', 'r')
+            .attr('values', '2;6;2')
+            .attr('dur', '1.5s')
+            .attr('repeatCount', 'indefinite');
+
+          // Pin Center
+          pinGroup.append('circle')
+            .attr('r', 2)
+            .attr('fill', '#3b82f6')
+            .attr('stroke', 'white')
+            .attr('stroke-width', 1);
+            
+          // Label
+          pinGroup.append('text')
+            .attr('y', -6)
+            .attr('text-anchor', 'middle')
+            .attr('fill', 'white')
+            .attr('font-size', '6px')
+            .attr('font-weight', '900')
+            .attr('font-family', 'monospace')
+            .attr('class', 'uppercase')
+            .style('text-shadow', '0 0 10px rgba(0,0,0,0.8)')
+            .text(country.capital || '');
+        }
+      }
+    }
+  };
+
   // Initialize Map
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
+
+    const updateDimensions = () => {
+      if (!containerRef.current || !svgRef.current) return;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+
+      if (width === 0 || height === 0) return;
+
+      d3.select(svgRef.current)
+        .attr('width', width)
+        .attr('height', height)
+        .attr('viewBox', `0 0 ${width} ${height}`);
+
+      // Re-initialize projection if needed or just handle the first time
+      if (!projectionRef.current) {
+        const projection = d3.geoMercator()
+          .scale(width / 2 / Math.PI)
+          .translate([width / 2, height / 1.5]);
+        projectionRef.current = projection;
+        
+        const path = d3.geoPath().projection(projection);
+        if (gRef.current) {
+          gRef.current.selectAll('path').attr('d', path as any);
+        }
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => {
+        updateDimensions();
+      });
+    });
+
+    resizeObserver.observe(containerRef.current);
 
     const width = containerRef.current.clientWidth;
     const height = containerRef.current.clientHeight;
@@ -45,6 +151,8 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
     const projection = d3.geoMercator()
       .scale(width / 2 / Math.PI)
       .translate([width / 2, height / 1.5]);
+
+    projectionRef.current = projection;
 
     const path = d3.geoPath().projection(projection);
 
@@ -147,9 +255,14 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
           tooltipTimeoutRef.current = setTimeout(() => {
             setTooltip(null);
           }, 2000);
+        })
+        .on('click', function(event, d: any) {
+          if (!isFinishedRef.current || !onCountryClick) return;
+          const id = String(d.id).padStart(3, '0');
+          onCountryClick(id);
         });
       
-      updateMapColors();
+      setMapLoaded(true);
     });
 
     const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
@@ -162,30 +275,37 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
 
     return () => {
       isCancelled = true;
+      resizeObserver.disconnect();
     };
   }, []);
 
-  const updateMapColors = () => {
-    if (!gRef.current) return;
-    gRef.current.selectAll('path')
-      .attr('fill', (d: any) => {
-        const id = String(d.id).padStart(3, '0');
-        if (guessedIds.has(id)) return '#4ade80';
-        if (highlightedId === id) return '#facc15';
-        if (isFinishedRef.current && !guessedIds.has(id)) return '#ef444433';
-        return '#262626';
-      })
-      .attr('stroke', (d: any) => {
-        const id = String(d.id).padStart(3, '0');
-        if (guessedIds.has(id)) return '#059669';
-        if (isFinishedRef.current && !guessedIds.has(id)) return '#ef444466';
-        return '#404040';
-      });
-  };
+  // Use mapLoaded to trigger color updates
+  useEffect(() => {
+    if (mapLoaded) {
+      updateMapColors();
+    }
+  }, [mapLoaded, guessedIds, highlightedId, isFinished, focusedContinent]);
+
+  // Handle pin timeout during active gameplay
+  useEffect(() => {
+    if (!highlightedId || isFinished || !gRef.current) return;
+
+    const timer = setTimeout(() => {
+      if (gRef.current && !isFinishedRef.current) {
+        gRef.current.selectAll('.capital-pin')
+          .transition()
+          .duration(500)
+          .style('opacity', 0)
+          .remove();
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [highlightedId, isFinished]);
 
   // Improved focus logic for better continent framing
   useEffect(() => {
-    if (!gRef.current || !countriesDataRef.current || !containerRef.current || !svgRef.current) return;
+    if (!mapLoaded || !gRef.current || !countriesDataRef.current || !containerRef.current || !svgRef.current) return;
 
     const width = containerRef.current.clientWidth;
     const height = containerRef.current.clientHeight;
@@ -202,6 +322,10 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       );
 
       if (continentFeatures.length > 0) {
+        const projection = d3.geoMercator()
+          .scale(width / 2 / Math.PI)
+          .translate([width / 2, height / 1.5]);
+
         let padding = 60;
         
         // Special Framing Logic
@@ -223,40 +347,36 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
           features: continentFeatures
         } as any);
 
+        projectionRef.current = projection;
         const path = d3.geoPath().projection(projection);
 
         g.selectAll('path').transition().duration(1200).ease(d3.easeCubicInOut)
-          .attr('d', path as any);
+          .attr('d', path as any)
+          .on('end', () => {
+            // Update pin position after focus transition finishes
+            updateMapColors();
+          });
+          
+        // Immediate update to pins so they move roughly with the map (though fitExtent is non-linear)
+        updateMapColors();
       }
     } else {
+      const projection = d3.geoMercator()
+        .scale(width / 2 / Math.PI)
+        .translate([width / 2, height / 1.5]);
+      
+      projectionRef.current = projection;
       const path = d3.geoPath().projection(projection);
+      
       g.selectAll('path').transition().duration(1000).ease(d3.easeCubicInOut)
-        .attr('d', path as any);
+        .attr('d', path as any)
+        .on('end', () => {
+          updateMapColors();
+        });
+        
+      updateMapColors();
     }
   }, [focusedContinent]);
-
-  // Efficient state updates without re-centering
-  useEffect(() => {
-    if (!gRef.current) return;
-
-    gRef.current.selectAll('path')
-      .transition()
-      .duration(300)
-      .attr('fill', (d: any) => {
-        const id = String(d.id).padStart(3, '0');
-        if (guessedIds.has(id)) return '#4ade80';
-        if (highlightedId === id) return '#facc15';
-        if (isFinishedRef.current && !guessedIds.has(id)) return '#ef444433';
-        return '#262626';
-      })
-      .attr('stroke', (d: any) => {
-        const id = String(d.id).padStart(3, '0');
-        if (guessedIds.has(id)) return '#059669';
-        if (isFinishedRef.current && !guessedIds.has(id)) return '#ef444466';
-        return '#404040';
-      });
-
-  }, [guessedIds, highlightedId, isFinished]);
 
   return (
     <div ref={containerRef} className="w-full h-full bg-[#171717] rounded-xl overflow-hidden shadow-inner border border-neutral-800 relative">

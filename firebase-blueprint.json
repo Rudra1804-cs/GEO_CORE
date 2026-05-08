@@ -1,0 +1,26 @@
+{
+  "entities": {
+    "LeaderboardEntry": {
+      "title": "Leaderboard Entry",
+      "description": "A record of a completed game mission.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The player's mission tag (name)." },
+        "score": { "type": "number", "description": "Number of countries correctly identified." },
+        "date": { "type": "string", "description": "The mission completion date." },
+        "time": { "type": "string", "description": "The mission completion time." },
+        "duration": { "type": "number", "description": "Total duration of the mission in seconds." },
+        "guessedIds": { "type": "array", "items": { "type": "string" }, "description": "List of country IDs identified." },
+        "userId": { "type": "string", "description": "The UID of the player." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of record creation." }
+      },
+      "required": ["name", "score", "date", "time", "guessedIds", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/leaderboard/{entryId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Global leaderboard of mission records."
+    }
+  }
+}
