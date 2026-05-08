@@ -9,16 +9,16 @@ GEO-CORE is a high-precision, interactive world geography simulation designed fo
 ## 📸 Mission Briefing (Screenshots)
 
 * **[Main Interface - The Global Command Center]**
-* <img width="1710" height="937" alt="Screenshot 2026-05-08 at 12 33 09" src="https://github.com/user-attachments/assets/e35ab57e-fe3c-467b-b871-72b6bb4bc6f8" />
+ <img width="1710" height="937" alt="Screenshot 2026-05-08 at 12 33 09" src="https://github.com/user-attachments/assets/e35ab57e-fe3c-467b-b871-72b6bb4bc6f8" />
 
 * **[Active Identification Mission - Tactical Feedback]**
-* <img width="1710" height="1107" alt="Screenshot 2026-05-08 at 12 33 33" src="https://github.com/user-attachments/assets/db3239d7-09c7-4c70-80bc-d58f25a4f4f0" />
+ <img width="1710" height="1107" alt="Screenshot 2026-05-08 at 12 33 33" src="https://github.com/user-attachments/assets/db3239d7-09c7-4c70-80bc-d58f25a4f4f0" />
 
 * **[Intelligence Archive - Mission Logs & Leaderboard]**
-* <img width="1710" height="911" alt="Screenshot 2026-05-08 at 12 34 06" src="https://github.com/user-attachments/assets/ecf6f489-d60e-42ff-b9de-4b68560d9c27" />
+ <img width="1710" height="911" alt="Screenshot 2026-05-08 at 12 34 06" src="https://github.com/user-attachments/assets/ecf6f489-d60e-42ff-b9de-4b68560d9c27" />
 
 * **[Final Debriefing - Territorial Analysis Report]**
-* <img width="1710" height="928" alt="Screenshot 2026-05-08 at 12 35 02" src="https://github.com/user-attachments/assets/f89e3055-6e01-440c-a29d-994244fbb75c" />
+ <img width="1710" height="928" alt="Screenshot 2026-05-08 at 12 35 02" src="https://github.com/user-attachments/assets/f89e3055-6e01-440c-a29d-994244fbb75c" />
 
 ---
 
