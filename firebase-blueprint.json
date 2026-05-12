@@ -11,6 +11,8 @@
         "time": { "type": "string", "description": "The mission completion time." },
         "duration": { "type": "number", "description": "Total duration of the mission in seconds." },
         "guessedIds": { "type": "array", "items": { "type": "string" }, "description": "List of country IDs identified." },
+        "mode": { "type": "string", "enum": ["zen", "challenge"], "description": "The mission difficulty mode." },
+        "limit": { "type": "number", "description": "The time limit in minutes for challenge mode." },
         "userId": { "type": "string", "description": "The UID of the player." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of record creation." }
       },

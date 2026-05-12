@@ -114,8 +114,9 @@ export default function App() {
   const [selectedExpandedCountryId, setSelectedExpandedCountryId] = useState<string | null>(null);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[]; userId?: string; userEmail?: string }[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[]; userId?: string; userEmail?: string; mode?: 'zen' | 'challenge'; limit?: number }[]>([]);
   const isAdmin = user?.email === 'f20240342@dubai.bits-pilani.ac.in';
+  const [selectedContinentFilter, setSelectedContinentFilter] = useState<string | null>(null);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const typeSoundPool = useRef<HTMLAudioElement[]>([]);
@@ -356,7 +357,12 @@ export default function App() {
         setInputValue('');
         
         // Add to score
-        const points = Math.floor(matchedCountry.area / 1000 * currentMultiplier);
+        const points = Math.floor(
+          (500 + // Base reward
+          (matchedCountry.area / TOTAL_LAND_AREA * 100000) + // Area weight
+          (matchedCountry.gdp / TOTAL_GLOBAL_GDP * 100000)) // GDP weight
+          * currentMultiplier
+        );
         setScore(prev => prev + points);
 
         setFeedback({ text: `Correct! ${matchedCountry.name} added.`, type: 'success' });
@@ -397,6 +403,8 @@ export default function App() {
       time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       duration: completionTime || 0,
       guessedIds: Array.from(guessedIds),
+      mode: gameMode,
+      limit: gameMode === 'challenge' ? selectedDuration : null,
       userId: user?.uid || null,
       userEmail: user?.email || null,
       createdAt: serverTimestamp()
@@ -828,7 +836,10 @@ export default function App() {
                                   <span className="text-[8px] font-mono text-neutral-600 lowercase opacity-60">[{entry.userEmail}]</span>
                                 )}
                               </h4>
-                              <span className="text-[9px] text-neutral-600 font-mono uppercase">{entry.date} {entry.time} • {entry.guessedIds?.length || 0} Territories</span>
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase">
+                                {entry.date} {entry.time} • {entry.guessedIds?.length || 0} Territories 
+                                {entry.mode === 'challenge' ? ` • ${entry.limit}m Limit` : ' • Zen'}
+                              </span>
                             </div>
                           </div>
                           
@@ -870,7 +881,7 @@ export default function App() {
                                   <MapIcon className="w-3 h-3" /> {leaderboard[selectedRecordIndex].guessedIds?.length || 0} Territories
                                 </div>
                                 <div className="text-[10px] font-mono uppercase text-neutral-500">
-                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time} • Completed in {formatTime(leaderboard[selectedRecordIndex].duration || 0)}
+                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time} • {leaderboard[selectedRecordIndex].mode === 'challenge' ? `Challenge (${leaderboard[selectedRecordIndex].limit}m)` : 'Zen Mode'} • Completed in {formatTime(leaderboard[selectedRecordIndex].duration || 0)}
                                 </div>
                               </div>
                             </div>
@@ -1334,45 +1345,85 @@ export default function App() {
 
               <div className="flex-1 flex gap-8 overflow-hidden mb-6">
                 <div className="w-80 flex flex-col gap-6 overflow-hidden">
-                  <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30">
-                    <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Secured ({leaderboard[selectedRecordIndex].guessedIds?.length || 0})
-                      </span>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                      {(leaderboard[selectedRecordIndex].guessedIds || []).map(id => {
-                        const country = COUNTRIES.find(c => c.id === id);
-                        const isSelected = selectedExpandedCountryId === id;
-                        return (
-                          <button 
-                            key={id} 
-                            onClick={() => setSelectedExpandedCountryId(isSelected ? null : id)}
-                            className={cn(
-                              "w-full flex items-center justify-between p-2 rounded-lg border text-[10px] font-mono group transition-all",
-                              isSelected 
-                                ? "bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
-                                : "bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:border-emerald-500/30 hover:text-emerald-400"
-                            )}
-                          >
-                            <span>{country?.name}</span>
-                            <ArrowRight className={cn("w-3 h-3 transition-transform", isSelected ? "rotate-0 text-emerald-400" : "-rotate-45 opacity-0 group-hover:opacity-100")} />
-                          </button>
-                        );
-                      })}
+                  <div className="flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 shrink-0">
+                    <div className="p-3 bg-neutral-900/50 border-b border-neutral-800 flex flex-wrap gap-1">
+                      <button 
+                        onClick={() => setSelectedContinentFilter(null)}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest transition-all",
+                          selectedContinentFilter === null ? "bg-emerald-500 text-black" : "bg-neutral-800 text-neutral-500"
+                        )}
+                      >
+                        All
+                      </button>
+                      {Object.keys(CONTINENT_STATS).map(cont => (
+                        <button 
+                          key={cont}
+                          onClick={() => setSelectedContinentFilter(cont)}
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest transition-all",
+                            selectedContinentFilter === cont ? "bg-white text-black" : "bg-neutral-800 text-neutral-500"
+                          )}
+                        >
+                          {cont.split(' ')[0]}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30">
-                    <div className="p-4 bg-red-500/5 border-b border-neutral-800 flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase text-red-500 tracking-widest flex items-center gap-2">
-                        <XCircle className="w-3 h-3" />
-                        Missed ({COUNTRIES.length - (leaderboard[selectedRecordIndex].guessedIds?.length || 0)})
+                  <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                    <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Secured ({(leaderboard[selectedRecordIndex].guessedIds || []).filter(id => {
+                          const c = COUNTRIES.find(curr => curr.id === id);
+                          return !selectedContinentFilter || c?.continent === selectedContinentFilter;
+                        }).length})
                       </span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                      {COUNTRIES.filter(c => !leaderboard[selectedRecordIndex].guessedIds?.includes(c.id)).map(country => {
+                      {(leaderboard[selectedRecordIndex].guessedIds || [])
+                        .filter(id => {
+                          const c = COUNTRIES.find(curr => curr.id === id);
+                          return !selectedContinentFilter || c?.continent === selectedContinentFilter;
+                        })
+                        .map(id => {
+                          const country = COUNTRIES.find(c => c.id === id);
+                          const isSelected = selectedExpandedCountryId === id;
+                          return (
+                            <button 
+                              key={id} 
+                              onClick={() => setSelectedExpandedCountryId(isSelected ? null : id)}
+                              className={cn(
+                                "w-full flex items-center justify-between p-2 rounded-lg border text-[10px] font-mono group transition-all",
+                                isSelected 
+                                  ? "bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                                  : "bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:border-emerald-500/30 hover:text-emerald-400"
+                              )}
+                            >
+                              <span>{country?.name}</span>
+                              <ArrowRight className={cn("w-3 h-3 transition-transform", isSelected ? "rotate-0 text-emerald-400" : "-rotate-45 opacity-0 group-hover:opacity-100")} />
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                    <div className="p-4 bg-red-500/5 border-b border-neutral-800 flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-red-500 tracking-widest flex items-center gap-2">
+                        <XCircle className="w-3 h-3" />
+                        Missed ({COUNTRIES.filter(c => {
+                          const isMissed = !leaderboard[selectedRecordIndex].guessedIds?.includes(c.id);
+                          return isMissed && (!selectedContinentFilter || c.continent === selectedContinentFilter);
+                        }).length})
+                      </span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                      {COUNTRIES.filter(c => {
+                        const isMissed = !leaderboard[selectedRecordIndex].guessedIds?.includes(c.id);
+                        return isMissed && (!selectedContinentFilter || c.continent === selectedContinentFilter);
+                      }).map(country => {
                         const isSelected = selectedExpandedCountryId === country.id;
                         return (
                           <button 
