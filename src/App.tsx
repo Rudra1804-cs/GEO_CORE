@@ -23,7 +23,8 @@ import {
   Volume2,
   VolumeX,
   LogIn,
-  LogOut
+  LogOut,
+  HelpCircle
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -120,6 +121,7 @@ export default function App() {
   const isAdmin = user?.email === 'f20240342@dubai.bits-pilani.ac.in' || user?.email === 'rudrapatra252006@gmail.com';
   const [adminFilter, setAdminFilter] = useState('');
   const [selectedContinentFilter, setSelectedContinentFilter] = useState<string | null>(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const typeSoundPool = useRef<HTMLAudioElement[]>([]);
@@ -714,6 +716,14 @@ export default function App() {
               <span className="text-lg">{score.toLocaleString()}</span>
             </div>
           </div>
+
+          <button 
+            onClick={() => setShowHelpModal(true)}
+            className="p-2 text-neutral-500 hover:text-white transition-colors"
+            title="How to play"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
 
           <button 
             onClick={finishGame}
@@ -1446,6 +1456,64 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Help Modal */}
+        <AnimatePresence>
+          {showHelpModal && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-[200] bg-[#0a0a0a]/90 backdrop-blur-md flex items-center justify-center p-8"
+              onClick={() => setShowHelpModal(false)}
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="max-w-md w-full bg-[#121212] border border-neutral-800 p-8 rounded-3xl shadow-2xl space-y-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
+                      <HelpCircle className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Mission Briefing</h3>
+                  </div>
+                  <button 
+                    onClick={() => setShowHelpModal(false)}
+                    className="p-2 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-500 hover:text-white"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-sm text-neutral-400 font-mono uppercase tracking-widest text-[10px]">
+                  <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-1">
+                    <p className="text-emerald-500 font-bold tracking-[0.2em]">The Goal</p>
+                    <p>Type names to identify countries and secure global territory.</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-1">
+                    <p className="text-amber-500 font-bold tracking-[0.2em]">Modes</p>
+                    <p><span className="text-neutral-200">Zen:</span> Infinite time. <span className="text-neutral-200">Challenge:</span> High-speed timed retrieval.</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-emerald-400/80">
+                    <p>TIP: Rotate the globe to find missing sectors. Click continents for tactical analysis.</p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setShowHelpModal(false)}
+                  className="w-full py-4 bg-emerald-500 text-black rounded-xl font-black uppercase tracking-widest transition-all hover:bg-emerald-400 active:scale-95 shadow-lg"
+                >
+                  Return to Mission
+                </button>
               </motion.div>
             </motion.div>
           )}
