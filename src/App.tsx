@@ -125,10 +125,32 @@ export default function App() {
   const typeSoundPool = useRef<HTMLAudioElement[]>([]);
   const returnSoundRef = useRef<HTMLAudioElement | null>(null);
 
+  const [isGuest, setIsGuest] = useState(false);
+
+  const viewingRecord = useMemo(() => {
+    if (selectedRecordIndex !== null && leaderboard[selectedRecordIndex]) {
+      return leaderboard[selectedRecordIndex];
+    }
+    if (isFinished) {
+      return {
+        name: playerName || (isGuest ? 'Guest Operative' : 'Anonymous Agent'),
+        score: Math.floor(score),
+        guessedIds: Array.from(guessedIds),
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mode: gameMode,
+        duration: completionTime || 0,
+        limit: gameMode === 'challenge' ? selectedDuration : null
+      };
+    }
+    return null;
+  }, [selectedRecordIndex, leaderboard, isFinished, playerName, isGuest, score, guessedIds, gameMode, completionTime, selectedDuration]);
+
   useEffect(() => {
     // Auth Listener
     const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      if (u) setIsGuest(false);
       if (u?.displayName && !playerName) {
         setPlayerName(u.displayName);
       }
@@ -182,6 +204,7 @@ export default function App() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
+      setIsGuest(false);
     } catch (error) {
       console.error('Login Error:', error);
     }
@@ -324,6 +347,9 @@ export default function App() {
       const normalized = inputValue.trim().toLowerCase();
       
       if (!hasStarted) {
+        if (!user && !isGuest) {
+          setIsGuest(true);
+        }
         setHasStarted(true);
         setStartTime(Date.now());
       }
@@ -614,8 +640,8 @@ export default function App() {
 
           <button 
                 onClick={() => {
-                  if (!user) {
-                    setFeedback({ text: 'Access Denied: Authentication required for record viewing.', type: 'info' });
+                  if (!user && !isGuest) {
+                    setFeedback({ text: 'Access Denied: Authentication required.', type: 'info' });
                     setTimeout(() => setFeedback(null), 3000);
                     return;
                   }
@@ -634,27 +660,46 @@ export default function App() {
                 {showRecordsView ? "BACK TO MAP" : "RECORDS"}
           </button>
 
-          <button
-            onClick={user ? handleLogout : handleLogin}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-all",
-              user ? "bg-neutral-800 text-neutral-400 hover:text-white" : "bg-emerald-500 text-black"
-            )}
-          >
+          <div className="flex items-center">
             {user ? (
-              <>
-                <LogOut className="w-3 h-3" />
-                <span>Sign Out</span>
-              </>
+              <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
+                <div className="px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+                  {user.displayName || 'Authorized'}
+                </div>
+                <button 
+                  onClick={handleLogout}
+                  className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3 h-3" />
+                </button>
+              </div>
             ) : (
-              <>
-                <LogIn className="w-3 h-3" />
-                <span>Sign In</span>
-              </>
+              <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
+                <button 
+                  onClick={handleLogin}
+                  className="px-3 py-1.5 rounded text-[10px] font-black uppercase text-neutral-500 hover:text-white transition-all flex items-center gap-2"
+                >
+                  <LogIn className="w-3 h-3" />
+                  Sign In
+                </button>
+                <div className="w-px h-4 bg-neutral-800 mx-1" />
+                <button 
+                  onClick={() => setIsGuest(!isGuest)}
+                  className={cn(
+                    "px-3 py-1.5 rounded text-[10px] font-black uppercase transition-all flex items-center gap-2",
+                    isGuest ? "bg-white text-black shadow-lg" : "text-neutral-500 hover:text-white"
+                  )}
+                >
+                  <Globe className="w-3 h-3" />
+                  {isGuest ? 'Guest Active' : 'Guest'}
+                </button>
+              </div>
             )}
-          </button>
-
-          <div className="flex flex-col items-end min-w-[80px]">
+          </div>
+            
+            <div className="flex flex-col items-end min-w-[80px]">
             <span className="text-[10px] text-neutral-500 font-mono uppercase">Protocol Time</span>
             <div className="flex items-center gap-2 text-white font-mono">
               <Timer className="w-4 h-4 text-emerald-500" />
@@ -947,24 +992,7 @@ export default function App() {
                           exit={{ opacity: 0 }}
                           className="flex-1 flex flex-col p-8 gap-8"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                              <h3 className="text-4xl font-black text-white uppercase tracking-tighter">{leaderboard[selectedRecordIndex].name}</h3>
-                              <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-neutral-500">
-                                  <Trophy className="w-3 h-3" /> {leaderboard[selectedRecordIndex].score.toLocaleString()} Points
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-neutral-500">
-                                  <MapIcon className="w-3 h-3" /> {leaderboard[selectedRecordIndex].guessedIds?.length || 0} Territories
-                                </div>
-                                <div className="text-[10px] font-mono uppercase text-neutral-500">
-                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time} • {leaderboard[selectedRecordIndex].mode === 'challenge' ? `Challenge (${leaderboard[selectedRecordIndex].limit}m)` : 'Zen Mode'} • {leaderboard[selectedRecordIndex].mode === 'challenge' && (leaderboard[selectedRecordIndex].duration || 0) >= (leaderboard[selectedRecordIndex].limit || 0) * 60 ? <span className="text-rose-500 font-bold">TIMED OUT</span> : `Completed in ${formatTime(leaderboard[selectedRecordIndex].duration || 0)}`}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex-1 relative bg-neutral-900/50 rounded-3xl border border-neutral-800/50 overflow-hidden shadow-inner">
+                          <div className="flex-1 relative bg-neutral-900/50 rounded-3xl border border-neutral-800/50 overflow-hidden shadow-inner order-first min-h-[400px]">
                              <WorldMap 
                                guessedIds={new Set(leaderboard[selectedRecordIndex].guessedIds || [])}
                                highlightedId={null}
@@ -997,6 +1025,23 @@ export default function App() {
                                   </button>
                                </div>
                              </div>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <h3 className="text-4xl font-black text-white uppercase tracking-tighter">{leaderboard[selectedRecordIndex].name}</h3>
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-neutral-500">
+                                  <Trophy className="w-3 h-3" /> {leaderboard[selectedRecordIndex].score.toLocaleString()} Points
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-neutral-500">
+                                  <MapIcon className="w-3 h-3" /> {leaderboard[selectedRecordIndex].guessedIds?.length || 0} Territories
+                                </div>
+                                <div className="text-[10px] font-mono uppercase text-neutral-500">
+                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time} • {leaderboard[selectedRecordIndex].mode === 'challenge' ? `Challenge (${leaderboard[selectedRecordIndex].limit}m)` : 'Zen Mode'} • {leaderboard[selectedRecordIndex].mode === 'challenge' && (leaderboard[selectedRecordIndex].duration || 0) >= (leaderboard[selectedRecordIndex].limit || 0) * 60 ? <span className="text-rose-500 font-bold">TIMED OUT</span> : `Completed in ${formatTime(leaderboard[selectedRecordIndex].duration || 0)}`}
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </motion.div>
                       ) : (
@@ -1109,24 +1154,35 @@ export default function App() {
                       )}
                     </button>
                   ) : (
-                    <button 
-                      onClick={handleLogin}
-                      className="w-full py-4 bg-emerald-500 text-black rounded-xl font-black uppercase tracking-widest transition-all hover:bg-emerald-400 active:scale-95 shadow-lg flex items-center justify-center gap-2"
-                    >
-                      <LogIn className="w-5 h-5" />
-                      Sign In to Record
-                    </button>
+                    <div className="flex flex-col gap-3">
+                      <button 
+                        onClick={handleLogin}
+                        className="w-full py-4 bg-emerald-500 text-black rounded-xl font-black uppercase tracking-widest transition-all hover:bg-emerald-400 active:scale-95 shadow-lg flex items-center justify-center gap-2"
+                      >
+                        <LogIn className="w-5 h-5" />
+                        Sign In to Record
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setShowNamePrompt(false);
+                          setShowResults(true);
+                        }}
+                        className="w-full py-3 bg-neutral-900 border border-neutral-800 text-neutral-400 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all hover:bg-neutral-800 hover:text-white"
+                      >
+                        Mission Analysis (No Sync)
+                      </button>
+                    </div>
                   )}
                   
-                  {!user && (
+                  {user && (
                     <button 
                       onClick={() => {
                         setShowNamePrompt(false);
-                        setShowRecordsView(true);
+                        setShowResults(true);
                       }}
                       className="w-full py-2 text-neutral-500 hover:text-neutral-300 text-[10px] font-mono uppercase tracking-widest transition-colors"
                     >
-                      Continue without recording
+                      Continue without saving
                     </button>
                   )}
                 </div>
@@ -1177,7 +1233,7 @@ export default function App() {
                     <div className="p-6 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-1 text-center font-mono">
                       <span className="text-[10px] text-neutral-500 uppercase block">Total Points</span>
                       <div className="text-2xl font-black text-yellow-500 leading-none">{Math.floor(score).toLocaleString()}</div>
-                      <span className="text-[10px] text-neutral-600 uppercase">Verdict Unit</span>
+                      <span className="text-[10px] text-neutral-600 uppercase">Retrieval Unit</span>
                     </div>
                   </div>
 
@@ -1358,13 +1414,22 @@ export default function App() {
 
                     <div className="p-8 rounded-3xl bg-emerald-500 text-black space-y-6 shadow-2xl flex flex-col justify-between">
                       <div className="space-y-3">
-                        <div className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">Verdict Algorithm</div>
+                        <div className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">Operational Intelligence</div>
                         <h3 className="text-3xl font-black leading-tight uppercase tracking-tighter">Superior Result</h3>
                         <p className="text-emerald-950 text-xs font-bold leading-relaxed italic border-l-2 border-emerald-900 pl-4 py-1">
                           Operational performance exceeded base expectations. Territorial retrieval protocol verified.
                         </p>
                       </div>
                       <div className="flex gap-4">
+                        <button 
+                          onClick={() => {
+                            setShowResults(false);
+                            setShowExpandedDetail(true);
+                          }}
+                          className="flex-1 py-4 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 font-extrabold uppercase tracking-widest text-[10px] rounded-2xl hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                        >
+                          <LayoutDashboard className="w-4 h-4" /> Expansion
+                        </button>
                         <button 
                           onClick={resetGame}
                           className="flex-1 py-4 bg-black text-emerald-500 font-extrabold uppercase tracking-widest text-[10px] rounded-2xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
@@ -1388,12 +1453,6 @@ export default function App() {
 
         {isFinished && !showResults && (
           <div className="absolute top-20 right-6 z-40 flex flex-col gap-2 items-end">
-            <button 
-              onClick={() => setShowResults(true)}
-              className="px-4 py-2 bg-emerald-500 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest shadow-lg hover:bg-emerald-400 transition-colors flex items-center gap-2"
-            >
-              <BarChart3 className="w-4 h-4" /> View Verdict
-            </button>
             {focusedContinent && (
               <button 
                 onClick={() => setFocusedContinent(null)}
@@ -1406,26 +1465,24 @@ export default function App() {
         )}
 
         <AnimatePresence>
-          {showExpandedDetail && selectedRecordIndex !== null && leaderboard[selectedRecordIndex] && (
+          {showExpandedDetail && viewingRecord && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-[#0a0a0a] flex flex-col p-6 overflow-hidden"
+              className="fixed inset-0 z-100 bg-[#0a0a0a] flex flex-col p-6 overflow-hidden"
             >
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-500 border border-emerald-500/30">
-                    <BarChart3 className="w-6 h-6" />
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500 border border-emerald-500/30">
+                    <BarChart3 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Territorial Analysis Expanded</h2>
-                    <p className="text-xs text-neutral-500 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
-                       Agent: <span className="text-emerald-500">{leaderboard[selectedRecordIndex].name}</span> 
+                    <h2 className="text-xl font-black text-white uppercase tracking-tighter">Territorial Expansion Survey</h2>
+                    <p className="text-[9px] text-neutral-500 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
+                       Agent: <span className="text-emerald-500">{viewingRecord.name}</span> 
                        <span className="opacity-30">•</span> 
-                       Score: <span className="text-emerald-500">{leaderboard[selectedRecordIndex].score.toLocaleString()}</span>
-                       <span className="opacity-30">•</span> 
-                       Efficiency: <span className="text-emerald-500">{Math.round(((leaderboard[selectedRecordIndex].guessedIds?.length || 0) / COUNTRIES.length) * 100)}%</span>
+                       Efficiency: <span className="text-emerald-500">{Math.round(((viewingRecord.guessedIds?.length || 0) / COUNTRIES.length) * 100)}%</span>
                     </p>
                   </div>
                 </div>
@@ -1434,9 +1491,9 @@ export default function App() {
                     setShowExpandedDetail(false);
                     setSelectedExpandedCountryId(null);
                   }}
-                  className="w-12 h-12 flex items-center justify-center bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500 hover:text-white transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-500 hover:text-white transition-colors"
                 >
-                  <XCircle className="w-6 h-6" />
+                  <XCircle className="w-5 h-5" />
                 </button>
               </div>
 
@@ -1472,14 +1529,14 @@ export default function App() {
                     <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
                         <CheckCircle2 className="w-3 h-3" />
-                        Secured ({(leaderboard[selectedRecordIndex].guessedIds || []).filter(id => {
+                        Secured ({(viewingRecord.guessedIds || []).filter(id => {
                           const c = COUNTRIES.find(curr => curr.id === id);
                           return !selectedContinentFilter || c?.continent === selectedContinentFilter;
                         }).length})
                       </span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                      {(leaderboard[selectedRecordIndex].guessedIds || [])
+                      {(viewingRecord.guessedIds || [])
                         .filter(id => {
                           const c = COUNTRIES.find(curr => curr.id === id);
                           return !selectedContinentFilter || c?.continent === selectedContinentFilter;
@@ -1517,14 +1574,14 @@ export default function App() {
                       <span className="text-[10px] font-black uppercase text-red-500 tracking-widest flex items-center gap-2">
                         <XCircle className="w-3 h-3" />
                         Missed ({COUNTRIES.filter(c => {
-                          const isMissed = !leaderboard[selectedRecordIndex].guessedIds?.includes(c.id);
+                          const isMissed = !viewingRecord.guessedIds?.includes(c.id);
                           return isMissed && (!selectedContinentFilter || c.continent === selectedContinentFilter);
                         }).length})
                       </span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                       {COUNTRIES.filter(c => {
-                        const isMissed = !leaderboard[selectedRecordIndex].guessedIds?.includes(c.id);
+                        const isMissed = !viewingRecord.guessedIds?.includes(c.id);
                         return isMissed && (!selectedContinentFilter || c.continent === selectedContinentFilter);
                       }).map(country => {
                         const isSelected = selectedExpandedCountryId === country.id;
@@ -1556,7 +1613,7 @@ export default function App() {
 
                 <div className="flex-1 relative bg-[#0a0a0a] border border-neutral-800 rounded-3xl overflow-hidden">
                   <WorldMap 
-                    guessedIds={new Set(leaderboard[selectedRecordIndex].guessedIds || [])}
+                    guessedIds={new Set(viewingRecord.guessedIds || [])}
                     highlightedId={selectedExpandedCountryId}
                     onCountryClick={setSelectedExpandedCountryId}
                     isFinished={true}
@@ -1575,7 +1632,7 @@ export default function App() {
                         {(() => {
                           const country = COUNTRIES.find(c => c.id === selectedExpandedCountryId);
                           if (!country) return null;
-                          const isGuessed = leaderboard[selectedRecordIndex].guessedIds?.includes(country.id);
+                          const isGuessed = viewingRecord.guessedIds?.includes(country.id);
                           return (
                             <div className="flex gap-8 items-start">
                               <div className="flex-1 space-y-4">
@@ -1634,7 +1691,7 @@ export default function App() {
               <div className="grid grid-cols-6 gap-4">
                  {Object.entries(CONTINENT_STATS).map(([continent]) => {
                    const totalInContinent = COUNTRIES.filter(c => c.continent === continent).length;
-                   const recordGuessed = leaderboard[selectedRecordIndex].guessedIds || [];
+                   const recordGuessed = viewingRecord.guessedIds || [];
                    const guessedInContinent = recordGuessed.filter(id => 
                      COUNTRIES.find(c => c.id === id)?.continent === continent
                    ).length;

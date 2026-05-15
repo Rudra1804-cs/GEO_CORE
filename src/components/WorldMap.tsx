@@ -34,8 +34,8 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
   const updateMapColors = () => {
     if (!gRef.current) return;
 
-    // Update path colors
-    gRef.current.selectAll('path')
+    // Update path colors - targeting classes now for multi-instance support
+    gRef.current.selectAll('.country-path')
       .transition()
       .duration(300)
       .attr('fill', (d: any) => {
@@ -52,7 +52,7 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
         return '#404040';
       });
 
-    // Handle Pins
+    // Handle Pins - needs to show up on all instances
     gRef.current.selectAll('.capital-pin').remove();
     
     if (highlightedId && containerRef.current && projectionRef.current) {
@@ -60,39 +60,43 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       if (country && country.capitalCoords) {
         const coords = projectionRef.current([country.capitalCoords.lng, country.capitalCoords.lat]);
         if (coords) {
-          const pinGroup = gRef.current.append('g')
-            .attr('class', 'capital-pin')
-            .attr('transform', `translate(${coords[0]}, ${coords[1]})`);
+          const worldWidth = 2 * Math.PI * projectionRef.current.scale();
+          // Render pin on the main instance and neighbors
+          [-1, 0, 1].forEach(offset => {
+            const pinGroup = gRef.current!.append('g')
+              .attr('class', 'capital-pin')
+              .attr('transform', `translate(${coords[0] + offset * worldWidth}, ${coords[1]})`);
 
-          // Pin Pulse
-          pinGroup.append('circle')
-            .attr('r', 4)
-            .attr('fill', '#3b82f6')
-            .attr('opacity', 0.4)
-            .append('animate')
-            .attr('attributeName', 'r')
-            .attr('values', '2;6;2')
-            .attr('dur', '1.5s')
-            .attr('repeatCount', 'indefinite');
+            // Pin Pulse
+            pinGroup.append('circle')
+              .attr('r', 4)
+              .attr('fill', '#3b82f6')
+              .attr('opacity', 0.4)
+              .append('animate')
+              .attr('attributeName', 'r')
+              .attr('values', '2;6;2')
+              .attr('dur', '1.5s')
+              .attr('repeatCount', 'indefinite');
 
-          // Pin Center
-          pinGroup.append('circle')
-            .attr('r', 2)
-            .attr('fill', '#3b82f6')
-            .attr('stroke', 'white')
-            .attr('stroke-width', 1);
-            
-          // Label
-          pinGroup.append('text')
-            .attr('y', -6)
-            .attr('text-anchor', 'middle')
-            .attr('fill', 'white')
-            .attr('font-size', '6px')
-            .attr('font-weight', '900')
-            .attr('font-family', 'monospace')
-            .attr('class', 'uppercase')
-            .style('text-shadow', '0 0 10px rgba(0,0,0,0.8)')
-            .text(country.capital || '');
+            // Pin Center
+            pinGroup.append('circle')
+              .attr('r', 2)
+              .attr('fill', '#3b82f6')
+              .attr('stroke', 'white')
+              .attr('stroke-width', 1);
+              
+            // Label
+            pinGroup.append('text')
+              .attr('y', -6)
+              .attr('text-anchor', 'middle')
+              .attr('fill', 'white')
+              .attr('font-size', '6px')
+              .attr('font-weight', '900')
+              .attr('font-family', 'monospace')
+              .attr('class', 'uppercase')
+              .style('text-shadow', '0 0 10px rgba(0,0,0,0.8)')
+              .text(country.capital || '');
+          });
         }
       }
     }
@@ -123,7 +127,9 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       if (!projectionRef.current) {
         const projection = d3.geoMercator()
           .scale(width / 2 / Math.PI)
-          .translate([width / 2, height / 1.5]);
+          .translate([width / 2, height / 2])
+          .rotate([10, 0])
+          .precision(0.1);
         projectionRef.current = projection;
         
         const path = d3.geoPath().projection(projection);
@@ -156,19 +162,36 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
 
     const projection = d3.geoMercator()
       .scale(width / 2 / Math.PI)
-      .translate([width / 2, height / 1.5]);
+      .translate([width / 2, height / 2])
+      .rotate([10, 0])
+      .precision(0.1);
 
     projectionRef.current = projection;
 
     const path = d3.geoPath().projection(projection);
 
     const zoomListener = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 12])
+      .scaleExtent([1, 15])
       .on('zoom', (event) => {
-        g.attr('transform', event.transform);
+        let { x, y, k } = event.transform;
+        const worldWidth = 2 * Math.PI * projection.scale() * k;
+        
+        // Horizontal wrapping logic
+        if (x < -worldWidth) x += worldWidth;
+        if (x > 0) x -= worldWidth;
+
+        g.attr('transform', `translate(${x}, ${y}) scale(${k})`);
       });
 
     svg.call(zoomListener);
+
+    // Initial transform to center Asia
+    const k = 1.35;
+    const centerPoint = projection([95, 30])!; // Center of Asia roughly
+    const tx = width / 2 - centerPoint[0] * k;
+    const ty = height / 2 - centerPoint[1] * k;
+    const initialTransform = d3.zoomIdentity.translate(tx, ty).scale(k);
+    svg.call(zoomListener.transform, initialTransform);
 
     let isCancelled = false;
     d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then((data: any) => {
@@ -176,7 +199,7 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       
       const countries = topojson.feature(data, data.objects.countries) as any;
       
-      // Somaliland mapping to Somalia (706)
+      // Sanitization mapping
       countries.features = countries.features.map((feature: any) => {
         if (feature.id === "732") feature.id = "504"; 
         
@@ -224,12 +247,23 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       });
 
       countriesDataRef.current = countries;
+      const worldWidth = 2 * Math.PI * projection.scale();
 
-      g.selectAll('path')
+      // Render 3 instances of the world for continuous wrapping
+      const instances = [-1, 0, 1];
+      g.selectAll('.world-instance').remove();
+      
+      const worldInstances = g.selectAll('.world-instance')
+        .data(instances)
+        .join('g')
+        .attr('class', 'world-instance')
+        .attr('transform', (d: number) => `translate(${d * worldWidth}, 0)`);
+
+      worldInstances.selectAll('path')
         .data(countries.features)
         .join('path')
         .attr('d', path as any)
-        .attr('id', (d: any) => `country-${String(d.id).padStart(3, '0')}`)
+        .attr('class', (d: any) => `country-path country-${String(d.id).padStart(3, '0')}`)
         .attr('fill', '#262626')
         .attr('stroke', '#404040')
         .attr('stroke-width', 0.5)
@@ -271,14 +305,6 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       setMapLoaded(true);
     });
 
-    const zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([1, 15])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform);
-      });
-
-    svg.call(zoomBehavior);
-
     return () => {
       isCancelled = true;
       resizeObserver.disconnect();
@@ -319,7 +345,8 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
     
     const projection = d3.geoMercator()
       .scale(width / 2 / Math.PI)
-      .translate([width / 2, height / 1.5]);
+      .translate([width / 2, height / 1.5])
+      .rotate([10, 0]);
 
     if (focusedContinent) {
       const continentCountryIds = COUNTRIES.filter(c => c.continent === focusedContinent).map(c => c.id);
@@ -330,7 +357,9 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       if (continentFeatures.length > 0) {
         const projection = d3.geoMercator()
           .scale(width / 2 / Math.PI)
-          .translate([width / 2, height / 1.5]);
+          .translate([width / 2, height / 2])
+          .rotate([10, 0])
+          .precision(0.1); // Keep same base rotation for consistency if possible, fitExtent overrides mostly
 
         let padding = 60;
         
@@ -355,6 +384,10 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
 
         projectionRef.current = projection;
         const path = d3.geoPath().projection(projection);
+        const worldWidth = 2 * Math.PI * projection.scale();
+
+        g.selectAll('.world-instance').transition().duration(1200).ease(d3.easeCubicInOut)
+          .attr('transform', (d: any) => `translate(${d * worldWidth}, 0)`);
 
         g.selectAll('path').transition().duration(1200).ease(d3.easeCubicInOut)
           .attr('d', path as any)
@@ -369,11 +402,17 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
     } else {
       const projection = d3.geoMercator()
         .scale(width / 2 / Math.PI)
-        .translate([width / 2, height / 1.5]);
+        .translate([width / 2, height / 2])
+        .rotate([10, 0])
+        .precision(0.1);
       
       projectionRef.current = projection;
       const path = d3.geoPath().projection(projection);
+      const worldWidth = 2 * Math.PI * projection.scale();
       
+      g.selectAll('.world-instance').transition().duration(1000).ease(d3.easeCubicInOut)
+        .attr('transform', (d: any) => `translate(${d * worldWidth}, 0)`);
+
       g.selectAll('path').transition().duration(1000).ease(d3.easeCubicInOut)
         .attr('d', path as any)
         .on('end', () => {
