@@ -2,61 +2,75 @@
 
 **Live Mission Link:** [https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app](https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app)
 
-GEO-CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data to track global dominance.
+GEO-CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data and real-time cloud synchronization to track global dominance.
 
 ---
 
-## 📸 Mission Briefing (Screenshots)
+## 📸 Mission Gallery (Pointers for Screenshots)
 
-* **[PLACEHOLDER: Main Interface - The Global Command Center]**
-* **[PLACEHOLDER: Active Identification Mission - Tactical Feedback]**
-* **[PLACEHOLDER: Intelligence Archive - Mission Logs & Leaderboard]**
-* **[PLACEHOLDER: Final Debriefing - Territorial Analysis Report]**
+*   **[Main Menu/Landing]** - *Insert screenshot of the cyber-tactical main interface here
+*   **[Global Identification Map]** - *Insert screenshot of the D3.js map with active highlights here
+*   **[Tactical Flag Feedback]** - *Insert screenshot showing the 2-second flag reveal on guess here
+*   **[Leaderboard/Intel Archive]** - *Insert screenshot of the competitive mission logs here
+*   **[Debriefing/Expansion Survey]** - *Insert screenshot of the final results and continent drill-down here
 
 ---
 
 ## 🚀 Advanced Feature Suite
 
-### 1. Tactical Identification Engine
-- **Predictive Data Entry**: Input country names or ISO identifiers to "reclaim" territories in real-time.
-- **Dynamic Projections**: Custom D3.js-powered Mercator projections with intelligent framing and continent-specific focus.
-- **Sector Feedback**: High-contrast visual confirmation of captured sectors vs. unidentified territories.
+### 1. Balanced Multi-Factor Scoring (V4.0)
+*   **Weighted Scoring Algorithm**: Points are now a balanced mix (25% each weight) of:
+    - **Territorial Landmass**: Total square kilometers captured vs. Global Land Area.
+    - **Economic Dominance**: Global GDP percentage secured through identified nations.
+    - **Strategic Volume**: Raw count of successfully identified sovereign sectors.
+    - **Operational Efficiency**: Dynamic multipliers based on time constraints (Challenge Mode).
+*   **Hard-Target Bonus**: Extra "Intel Points" for identifying micro-states and hard-to-find territories (Inverse Area Scaling).
+*   **Multiplier System**: 
+    - **Zen Mode**: 1.0x (Precision training)
+    - **Challenge Mode**: Scaling from 1.2x to 2.0x (High-stakes operations)
 
-### 2. Firebase Intelligence Integration
-- **Secure Authentication**: Operatives can sync data via Google Biometric (Auth) to preserve mission history.
-- **Centralized Mission Logs**: Cloud-synchronized leaderboard with persistent record-keeping.
-- **Admin Oversight (Level 4 Clearing)**: Master access for verified officers to monitor global data cross-referenced by operative email.
-- **Data Integrity**: Intelligent prevention of duplicate record entries to ensure mission log purity.
+### 2. Tactical Identification Engine
+- **Predictive Data Entry**: Input names, ISO codes, or tactical aliases.
+- **Visual Authentication**: High-resolution 160px flag verification for 2 seconds.
+- **Geospatial Mapping**: High-performance D3.js projection with ResizeObserver for fluid "Command Center" scaling.
+- **Capital Proximity Radar**: Visual pulses identifying capital city coordinates for all 199+ global targets.
 
-### 3. Capital Proximity Radar (CPR)
-- **Precision Guidance**: Brief visual markers indicating the capital city of target nations.
-- **Stealth-Fade Logic**: Pins automatically de-materialize after 2 seconds of exposure to maintain mission difficulty.
-- **Miniaturized Visuals**: Scaled-down markers to prevent obstruction of territorial borders.
+### 3. Firebase Intelligence & Security
+- **Data Isolation Protocol**: Records are cryptographically separated by `userId`. An operative NEVER sees another's data unless authorized.
+- **Level 4 Admin Clearance**: Dedicated oversight interface for high-ranking officers to monitor collective mission logs.
+- **Cloud Persistence**: Automatic state-syncing of records, high-scores, and identification lists.
+- **Project Infrastructure**: Powered by `Google Firebase` for industry-standard reliability.
 
-### 4. Sector Analysis Mode
-- **Post-Mission Review**: Switch to analysis mode to zoom into specific continental sectors.
-- **Micro-Stats Analysis**: Real-time calculation of Wealth Capture (GDP) and Area Coverage (Landmass) at a global and regional scale.
-- **Interactive Tooltips**: High-speed, lightweight tooltips for instant sector naming during analysis.
+### 4. Sector Analysis (Expansion Survey)
+- **Continental Deep-Dive**: Clickable continental sectors in the Debriefing view to reveal exact "Identified" vs "Missed" manifests.
+- **Expansion Metrics**: Real-time calculation of continental landmass and GDP coverage.
 
-### 5. High-Fidelity UI/UX
-- **Cyber-Industrial Aesthetic**: Neutral-900 tactical palette with Emerald-500 feedback accents.
-- **Immersive Audio**: Typewriter sound effects and tactical audio cues (optional/toggle).
-- **Responsive Command**: Full layout stability with `ResizeObserver` and `requestAnimationFrame` for buttery-smooth map scaling.
+---
+
+## 📡 Operational Usage & Cost Monitoring
+
+### Is this Free?
+Yes. GEO-CORE operates on the **Firebase Spark Plan**, which provides a generous free tier for developers and small missions:
+*   **Firebase Authentication**: 50,000 monthly active users for Google Identity (Free).
+*   **Cloud Firestore**: 
+    - 50,000 Reads / day (Free)
+    - 20,000 Writes / day (Free)
+    - 20,000 Deletes / day (Free)
+*   **Hosting**: 10GB total storage (Free).
+
+### How to Check Usage?
+Officers can monitor real-time resource consumption and quota status by logging into the:
+[Firebase Console - Operational Dashboard](https://console.firebase.google.com/project/gen-lang-client-0692463011/overview)
+
+> **Note**: If daily quotas are exceeded (e.g., "Quota Exceeded" error), the mission will pause until 00:00 PST when limits reset.
 
 ---
 
 ## 🛠 Strategic Tech Stack
-
-- **Framework**: React 18+ (Vite)
-- **Database/Auth**: Firebase Firestore & Authentication
-- **Geodata Visuals**: D3.js (TopoJSON, Geo-Projections)
-- **Motion Kinetics**: Framer Motion / Motion for React
-- **Styling**: Tailwind CSS
-- **Vector Assets**: Lucide React
-
----
-
-## 📡 Operational Notes
-*   This protocol is optimized for desktop surveillance windows.
-*   Mobile tactical deployment is supported via responsive breakpoints.
-*   All mission data is stored in the **GEO-CORE** central intelligence database.
+- **Frontend**: React 18+ (Vite)
+- **Engine**: TypeScript
+- **Database**: Firestore (Cloud NoSQL)
+- **Auth**: Firebase Google Identity
+- **Visuals**: D3.js (Geospatial TopoJSON)
+- **Animations**: Motion for React
+- **Styles**: Tailwind CSS (Tailored Tactical Theme)

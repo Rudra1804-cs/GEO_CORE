@@ -5,6 +5,7 @@
 
 export interface CountryData {
   id: string; // ISO 3166-1 numeric or alpha-3
+  code?: string; // ISO 3166-1 alpha-2 for flags
   name: string;
   aliases: string[];
   area: number; // in sq km

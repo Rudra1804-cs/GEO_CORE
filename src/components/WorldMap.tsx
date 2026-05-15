@@ -24,6 +24,7 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [mapLoaded, setMapLoaded] = useState(false);
+  const dimensionsRef = useRef({ width: 0, height: 0 });
 
   useEffect(() => {
     isFinishedRef.current = isFinished;
@@ -107,6 +108,11 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       const height = containerRef.current.clientHeight;
 
       if (width === 0 || height === 0) return;
+      
+      // Avoid ResizeObserver loop by checking if dimensions actually changed
+      if (width === dimensionsRef.current.width && height === dimensionsRef.current.height) return;
+      
+      dimensionsRef.current = { width, height };
 
       d3.select(svgRef.current)
         .attr('width', width)

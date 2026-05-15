@@ -24,7 +24,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == 'f20240342@dubai.bits-pilani.ac.in' && request.auth.token.email_verified == true;
+      return isSignedIn() && (request.auth.token.email == 'f20240342@dubai.bits-pilani.ac.in' || request.auth.token.email == 'rudrapatra252006@gmail.com') && request.auth.token.email_verified == true;
     }
 
     match /leaderboard/{entryId} {
