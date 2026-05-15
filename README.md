@@ -57,17 +57,6 @@ GEO_CORE is a high-precision, interactive world geography simulation designed fo
 
 ---
 
-## 📡 Operational Usage & Cost Monitoring
-
-### Is this Free?
-Yes. GEO-CORE operates on the **Firebase Spark Plan**, which provides a generous free tier for developers and small missions:
-*   **Firebase Authentication**: 50,000 monthly active users for Google Identity (Free).
-*   **Cloud Firestore**: 
-    - 50,000 Reads / day (Free)
-    - 20,000 Writes / day (Free)
-    - 20,000 Deletes / day (Free)
-*   **Hosting**: 10GB total storage (Free).
-
 ### How to Check Usage?
 Officers can monitor real-time resource consumption and quota status by logging into the:
 [Firebase Console - Operational Dashboard](https://console.firebase.google.com/project/gen-lang-client-0692463011/overview)
