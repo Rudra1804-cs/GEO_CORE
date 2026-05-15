@@ -1,8 +1,8 @@
-# GEO-CORE: Global Surveillance & Identification Protocol
+# GEO_CORE: Global Surveillance & Identification Protocol
 
 **Live Mission Link:** [https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app](https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app)
 
-GEO-CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data and real-time cloud synchronization to track global dominance.
+GEO_CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data and real-time cloud synchronization to track global dominance.
 
 ---
 
