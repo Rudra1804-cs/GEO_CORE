@@ -771,8 +771,8 @@ export default function App() {
 
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
         {/* Sidebar Controls */}
-        <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 shrink-0 max-h-fit lg:max-h-full z-20">
-          <div className="p-2 lg:p-6 space-y-2 lg:space-y-6">
+        <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 shrink-0 h-[35dvh] lg:h-auto lg:max-h-full z-20">
+          <div className="p-2 lg:p-6 space-y-2 lg:space-y-6 shrink-0">
             <AnimatePresence mode="wait">
               <motion.div key="search" className="space-y-0.5 lg:space-y-2">
                 <label className="text-[8px] lg:text-[10px] text-neutral-500 font-mono uppercase tracking-widest hidden lg:block">Identify Global Territory</label>
@@ -811,8 +811,8 @@ export default function App() {
             </AnimatePresence>
           </div>
 
-          <div className="hidden lg:flex flex-1 flex-col overflow-hidden">
-            <div className="px-6 pb-6 space-y-4">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="hidden lg:block px-6 pb-6 space-y-4">
               <div className="p-4 rounded-xl bg-neutral-900/50 border border-neutral-800/50 space-y-3">
                 <div className="flex justify-between items-center text-[10px]">
                   <span className="text-neutral-500 font-mono uppercase tracking-widest">Landmass Coverage</span>
@@ -843,11 +843,11 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-4">
+            <div className="flex-1 overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 custom-scrollbar space-y-4">
                <div>
-                 <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#0a0a0a] lg:bg-[#121212] py-2">Secured Zones</label>
+                 <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-2 lg:mb-4 sticky top-0 bg-[#121212] lg:bg-[#121212] py-1 lg:py-2 z-10">Secured Zones</label>
                <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
-                  {[...guessedIds].reverse().slice(0, 10).map(id => {
+                  {[...guessedIds].reverse().map(id => {
                     const country = COUNTRIES.find(c => c.id === id);
                     return (
                       <motion.div 
