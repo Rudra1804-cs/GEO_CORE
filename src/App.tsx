@@ -1321,6 +1321,29 @@ export default function App() {
                       {/* Left: Sector Selection Grid */}
                       <div className="lg:col-span-1 flex flex-col gap-4 overflow-hidden">
                         <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 overflow-y-auto pr-2 custom-scrollbar lg:max-h-[300px]">
+                          <button
+                            onClick={() => setFocusedContinent(focusedContinent === "GLOBAL" ? null : "GLOBAL")}
+                            className={cn(
+                              "text-left p-3 rounded-xl border transition-all relative overflow-hidden group font-mono",
+                              focusedContinent === "GLOBAL" ? "bg-emerald-500 border-emerald-400 scale-[1.02]" : "bg-neutral-900 border-neutral-800 hover:border-neutral-700"
+                            )}
+                          >
+                            <div className="relative z-10 flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <span className={cn("text-[8px] font-black uppercase tracking-widest", focusedContinent === "GLOBAL" ? "text-emerald-950" : "text-neutral-500")}>
+                                  GLOBAL REGION
+                                </span>
+                                <div className={cn("text-xs font-black", focusedContinent === "GLOBAL" ? "text-emerald-950" : "text-white")}>
+                                  {guessedIds.size} <span className="opacity-40">/</span> {COUNTRIES.length}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className={cn("text-sm font-black", focusedContinent === "GLOBAL" ? "text-emerald-950" : "text-emerald-500")}>
+                                  {Math.round((guessedIds.size / COUNTRIES.length) * 100)}%
+                                </span>
+                              </div>
+                            </div>
+                          </button>
                           {Object.entries(CONTINENT_STATS).map(([name, stats]) => {
                             const contData = continentStats[name];
                             const efficiency = (contData.guessed / contData.total) * 100;
@@ -1363,48 +1386,61 @@ export default function App() {
                               exit={{ opacity: 0, x: -20 }}
                               className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 space-y-4"
                             >
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest">Territory</span>
-                                  <span className="text-[10px] text-white font-mono">
-                                    {Math.round((continentStats[focusedContinent].areaGuessed / (continentTotals[focusedContinent]?.area || 1)) * 100)}%
-                                  </span>
-                                </div>
-                                <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
-                                  <motion.div 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${(continentStats[focusedContinent].areaGuessed / (continentTotals[focusedContinent]?.area || 1)) * 100}%` }}
-                                    className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]"
-                                  />
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">Economy</span>
-                                  <span className="text-[10px] text-emerald-500 font-mono">
-                                    {(continentTotals[focusedContinent]?.gdp || 0) > 0 
-                                      ? Math.round((continentStats[focusedContinent].gdpGuessed / continentTotals[focusedContinent].gdp) * 100)
-                                      : 0}%
-                                  </span>
-                                </div>
-                                <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
-                                  <motion.div 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${(continentTotals[focusedContinent]?.gdp || 0) > 0 ? (continentStats[focusedContinent].gdpGuessed / continentTotals[focusedContinent].gdp) * 100 : 0}%` }}
-                                    className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                                  />
-                                </div>
-                              </div>
-                              <div className="pt-2 border-t border-neutral-800 grid grid-cols-1 gap-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[7px] text-neutral-600 font-mono">LANDMASS</span>
-                                  <span className="text-[8px] text-neutral-400 font-mono">{(continentStats[focusedContinent].areaGuessed / 1000).toLocaleString()}K KM²</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[7px] text-neutral-600 font-mono">OUTPUT</span>
-                                  <span className="text-[8px] text-emerald-600 font-mono">${(continentStats[focusedContinent].gdpGuessed / 1000).toFixed(1)}B</span>
-                                </div>
-                              </div>
+                              {(() => {
+                                const isGlobal = focusedContinent === "GLOBAL";
+                                const areaGuessed = isGlobal ? Array.from(guessedIds).reduce((acc: number, id) => acc + (COUNTRIES.find(c => c.id === id)?.area || 0), 0) : continentStats[focusedContinent].areaGuessed;
+                                const areaTotal = isGlobal ? totalPossibleArea : (continentTotals[focusedContinent]?.area || 1);
+                                const gdpGuessed = isGlobal ? Array.from(guessedIds).reduce((acc: number, id) => acc + (COUNTRIES.find(c => c.id === id)?.gdp || 0), 0) : continentStats[focusedContinent].gdpGuessed;
+                                const gdpTotal = isGlobal ? totalPossibleGdp : (continentTotals[focusedContinent]?.gdp || 0);
+                                
+                                const areaPercent = Math.round((areaGuessed / areaTotal) * 100);
+                                const gdpPercent = gdpTotal > 0 ? Math.round((gdpGuessed / gdpTotal) * 100) : 0;
+
+                                return (
+                                  <>
+                                    <div className="space-y-1">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest">Territory</span>
+                                        <span className="text-[10px] text-white font-mono">
+                                          {areaPercent}%
+                                        </span>
+                                      </div>
+                                      <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                        <motion.div 
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${areaPercent}%` }}
+                                          className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">Economy</span>
+                                        <span className="text-[10px] text-emerald-500 font-mono">
+                                          {gdpPercent}%
+                                        </span>
+                                      </div>
+                                      <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                        <motion.div 
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${gdpPercent}%` }}
+                                          className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-neutral-800 grid grid-cols-1 gap-2">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[7px] text-neutral-600 font-mono">LANDMASS</span>
+                                        <span className="text-[8px] text-neutral-400 font-mono">{(areaGuessed / 1000).toLocaleString()}K KM²</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[7px] text-neutral-600 font-mono">OUTPUT</span>
+                                        <span className="text-[8px] text-emerald-600 font-mono">${(gdpGuessed / 1000).toFixed(1)}B</span>
+                                      </div>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -1435,7 +1471,7 @@ export default function App() {
                                     highlightedId={selectedExpandedCountryId} 
                                     onCountryClick={setSelectedExpandedCountryId}
                                     isFinished={true} 
-                                    focusedContinent={focusedContinent}
+                                    focusedContinent={focusedContinent === "GLOBAL" ? null : focusedContinent}
                                   />
                                 </div>
                             </div>
@@ -1715,70 +1751,68 @@ export default function App() {
 
                   <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
                     <AnimatePresence>
-                      {selectedContinentFilter && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden border-b border-neutral-800 bg-neutral-900/50"
-                        >
-                           <div className="p-4 space-y-3">
-                              {(() => {
-                                const continent = selectedContinentFilter;
-                                const continentCountries = COUNTRIES.filter(c => c.continent === continent);
-                                const recordGuessed = viewingRecord.guessedIds || [];
-                                const guessedCountries = continentCountries.filter(c => recordGuessed.includes(c.id));
-                                
-                                const totalArea = continentTotals[continent]?.area || 0;
-                                const coveredArea = guessedCountries.reduce((sum, c) => sum + c.area, 0);
-                                const areaPercent = totalArea > 0 ? (coveredArea / totalArea) * 100 : 0;
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="overflow-hidden border-b border-neutral-800 bg-neutral-900/50"
+                      >
+                         <div className="p-4 space-y-3">
+                            {(() => {
+                              const continent = selectedContinentFilter;
+                              const isGlobal = !continent;
+                              const continentCountries = isGlobal ? COUNTRIES : COUNTRIES.filter(c => c.continent === continent);
+                              const recordGuessed = viewingRecord.guessedIds || [];
+                              const guessedCountries = continentCountries.filter(c => recordGuessed.includes(c.id));
+                              
+                              const totalArea = isGlobal ? totalPossibleArea : (continentTotals[continent]?.area || 0);
+                              const coveredArea = guessedCountries.reduce((sum, c) => sum + c.area, 0);
+                              const areaPercent = totalArea > 0 ? (coveredArea / totalArea) * 100 : 0;
 
-                                const totalGdp = continentTotals[continent]?.gdp || 0;
-                                const coveredGdp = guessedCountries.reduce((sum, c) => sum + (c.gdp || 0), 0);
-                                const gdpPercent = totalGdp > 0 ? (coveredGdp / totalGdp) * 100 : 0;
+                              const totalGdp = isGlobal ? totalPossibleGdp : (continentTotals[continent]?.gdp || 0);
+                              const coveredGdp = guessedCountries.reduce((sum, c) => sum + (c.gdp || 0), 0);
+                              const gdpPercent = totalGdp > 0 ? (coveredGdp / totalGdp) * 100 : 0;
 
-                                return (
-                                  <>
-                                    <div className="space-y-1.5">
-                                      <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-neutral-500">
-                                        <span>Territory</span>
-                                        <span className="text-white">{Math.round(areaPercent)}%</span>
-                                      </div>
-                                      <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
-                                        <motion.div 
-                                          initial={{ width: 0 }}
-                                          animate={{ width: `${areaPercent}%` }}
-                                          className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]"
-                                        />
-                                      </div>
-                                      <div className="flex justify-between items-center text-[7px] text-neutral-600 font-mono">
-                                        <span>LANDMASS</span>
-                                        <span>{(coveredArea / 1000).toLocaleString()}K / {(totalArea / 1000).toLocaleString()}K KM²</span>
-                                      </div>
+                              return (
+                                <>
+                                  <div className="space-y-1.5">
+                                    <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-neutral-500">
+                                      <span>{isGlobal ? 'Global' : 'Regional'} Territory</span>
+                                      <span className="text-white">{Math.round(areaPercent)}%</span>
                                     </div>
-                                    <div className="space-y-1.5 pt-1 border-t border-neutral-800/50">
-                                      <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-emerald-500/70">
-                                        <span>Economy</span>
-                                        <span className="text-emerald-500">{Math.round(gdpPercent)}%</span>
-                                      </div>
-                                      <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
-                                        <motion.div 
-                                          initial={{ width: 0 }}
-                                          animate={{ width: `${gdpPercent}%` }}
-                                          className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                                        />
-                                      </div>
-                                      <div className="flex justify-between items-center text-[7px] text-emerald-600/60 font-mono">
-                                        <span>OUTPUT</span>
-                                        <span>${(coveredGdp / 1000).toFixed(1)}B / ${(totalGdp / 1000).toFixed(1)}B</span>
-                                      </div>
+                                    <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                      <motion.div 
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${areaPercent}%` }}
+                                        className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                                      />
                                     </div>
-                                  </>
-                                );
-                              })()}
-                           </div>
-                        </motion.div>
-                      )}
+                                    <div className="flex justify-between items-center text-[7px] text-neutral-600 font-mono">
+                                      <span>LANDMASS</span>
+                                      <span>{(coveredArea / 1000).toLocaleString()}K / {(totalArea / 1000).toLocaleString()}K KM²</span>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1.5 pt-1 border-t border-neutral-800/50">
+                                    <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-emerald-500/70">
+                                      <span>{isGlobal ? 'Global' : 'Regional'} Economy</span>
+                                      <span className="text-emerald-500">{Math.round(gdpPercent)}%</span>
+                                    </div>
+                                    <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                      <motion.div 
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${gdpPercent}%` }}
+                                        className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                      />
+                                    </div>
+                                    <div className="flex justify-between items-center text-[7px] text-emerald-600/60 font-mono">
+                                      <span>OUTPUT</span>
+                                      <span>${(coveredGdp / 1000).toFixed(1)}B / ${(totalGdp / 1000).toFixed(1)}B</span>
+                                    </div>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                         </div>
+                      </motion.div>
                     </AnimatePresence>
                     <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
