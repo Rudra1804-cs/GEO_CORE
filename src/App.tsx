@@ -276,7 +276,7 @@ export default function App() {
   const totalPossibleArea = useMemo(() => COUNTRIES.reduce((acc, c) => acc + c.area, 0), []);
   const totalPossibleGdp = useMemo(() => COUNTRIES.reduce((acc, c) => acc + (c.gdp || 0), 0), []);
 
-  const percentageCovered = (coveredArea / totalPossibleArea) * 100;
+  const percentageCovered = guessedIds.size === COUNTRIES.length ? 100 : Math.min(99.9, (coveredArea / totalPossibleArea) * 100);
   
   const coveredWealth = useMemo(() => {
     return Array.from(guessedIds).reduce((acc: number, id) => {
@@ -285,7 +285,7 @@ export default function App() {
     }, 0);
   }, [guessedIds]);
 
-  const percentageWealthCovered = (coveredWealth / totalPossibleGdp) * 100;
+  const percentageWealthCovered = guessedIds.size === COUNTRIES.length ? 100 : Math.min(99.9, (coveredWealth / totalPossibleGdp) * 100);
   
   const continentStats = useMemo(() => {
     const stats: Record<string, { guessed: number; total: number; areaGuessed: number; gdpGuessed: number; guessedList: CountryData[]; missedList: CountryData[] }> = {};
@@ -846,7 +846,7 @@ export default function App() {
                   <div className="space-y-1">
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="text-yellow-500/70 font-mono uppercase tracking-widest">Wealth Retrieval</span>
-                      <span className="font-mono text-yellow-500">{percentageWealthCovered.toFixed(2)}%</span>
+                      <span className="font-mono text-yellow-500">{guessedIds.size === COUNTRIES.length ? '100' : percentageWealthCovered.toFixed(2)}%</span>
                     </div>
                     <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
                       <motion.div 
@@ -1339,14 +1339,15 @@ export default function App() {
                               </div>
                               <div className="text-right">
                                 <span className={cn("text-sm font-black", focusedContinent === "GLOBAL" ? "text-emerald-950" : "text-emerald-500")}>
-                                  {Math.round((guessedIds.size / COUNTRIES.length) * 100)}%
+                                  {guessedIds.size === COUNTRIES.length ? '100' : Math.min(99, Math.round((guessedIds.size / COUNTRIES.length) * 100))}%
                                 </span>
                               </div>
                             </div>
                           </button>
                           {Object.entries(CONTINENT_STATS).map(([name, stats]) => {
                             const contData = continentStats[name];
-                            const efficiency = (contData.guessed / contData.total) * 100;
+                            const efficiencyRaw = (contData.guessed / contData.total) * 100;
+                            const efficiency = guessedIds.size === COUNTRIES.length ? efficiencyRaw : Math.min(99, efficiencyRaw);
                             const isSelected = focusedContinent === name;
 
                             return (
@@ -1393,8 +1394,12 @@ export default function App() {
                                 const gdpGuessed = isGlobal ? Array.from(guessedIds).reduce((acc: number, id) => acc + (COUNTRIES.find(c => c.id === id)?.gdp || 0), 0) : continentStats[focusedContinent].gdpGuessed;
                                 const gdpTotal = isGlobal ? totalPossibleGdp : (continentTotals[focusedContinent]?.gdp || 0);
                                 
-                                const areaPercent = Math.round((areaGuessed / areaTotal) * 100);
-                                const gdpPercent = gdpTotal > 0 ? Math.round((gdpGuessed / gdpTotal) * 100) : 0;
+                                const areaPercent = isGlobal 
+                                  ? (guessedIds.size === COUNTRIES.length ? 100 : Math.min(99.9, Math.round((areaGuessed / areaTotal) * 100)))
+                                  : (guessedIds.size === COUNTRIES.length ? Math.round((areaGuessed / areaTotal) * 100) : Math.min(99.9, Math.round((areaGuessed / areaTotal) * 100)));
+                                const gdpPercent = isGlobal 
+                                  ? (guessedIds.size === COUNTRIES.length ? 100 : Math.min(99.9, gdpTotal > 0 ? Math.round((gdpGuessed / gdpTotal) * 100) : 0))
+                                  : (guessedIds.size === COUNTRIES.length ? (gdpTotal > 0 ? Math.round((gdpGuessed / gdpTotal) * 100) : 0) : Math.min(99.9, gdpTotal > 0 ? Math.round((gdpGuessed / gdpTotal) * 100) : 0));
 
                                 return (
                                   <>
@@ -1706,7 +1711,7 @@ export default function App() {
                     <p className="text-[9px] text-neutral-500 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
                        Agent: <span className="text-emerald-500">{viewingRecord.name}</span> 
                        <span className="opacity-30">•</span> 
-                       Efficiency: <span className="text-emerald-500">{Math.round(((viewingRecord.guessedIds?.length || 0) / COUNTRIES.length) * 100)}%</span>
+                       Efficiency: <span className="text-emerald-500">{viewingRecord.guessedIds?.length === COUNTRIES.length ? '100' : Math.min(99, Math.round(((viewingRecord.guessedIds?.length || 0) / COUNTRIES.length) * 100))}%</span>
                     </p>
                   </div>
                 </div>
@@ -1766,11 +1771,17 @@ export default function App() {
                               
                               const totalArea = isGlobal ? totalPossibleArea : (continentTotals[continent]?.area || 0);
                               const coveredArea = guessedCountries.reduce((sum, c) => sum + c.area, 0);
-                              const areaPercent = totalArea > 0 ? (coveredArea / totalArea) * 100 : 0;
+                              const areaPercentPre = totalArea > 0 ? (coveredArea / totalArea) * 100 : 0;
+                              const areaPercent = isGlobal 
+                                ? (viewingRecord.guessedIds?.length === COUNTRIES.length ? 100 : Math.min(99, Math.round(areaPercentPre)))
+                                : Math.round(areaPercentPre);
 
                               const totalGdp = isGlobal ? totalPossibleGdp : (continentTotals[continent]?.gdp || 0);
                               const coveredGdp = guessedCountries.reduce((sum, c) => sum + (c.gdp || 0), 0);
-                              const gdpPercent = totalGdp > 0 ? (coveredGdp / totalGdp) * 100 : 0;
+                              const gdpPercentPre = totalGdp > 0 ? (coveredGdp / totalGdp) * 100 : 0;
+                              const gdpPercent = isGlobal
+                                ? (viewingRecord.guessedIds?.length === COUNTRIES.length ? 100 : Math.min(99, Math.round(gdpPercentPre)))
+                                : Math.round(gdpPercentPre);
 
                               return (
                                 <>
