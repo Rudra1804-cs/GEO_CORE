@@ -1,4 +1,4 @@
-<img width="876" height="506" alt="image" src="https://github.com/user-attachments/assets/6d9a24ab-54d1-454c-bdb5-afb9a68f26bd" /># GEO-CORE: Global Surveillance & Identification Protocol
+# GEO-CORE: Global Surveillance & Identification Protocol
 
 **Live Mission Link:** [https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app](https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app)
 
