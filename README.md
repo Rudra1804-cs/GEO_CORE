@@ -6,7 +6,7 @@ GEO-CORE is a high-precision, interactive world geography simulation designed fo
 
 ---
 
-## 📸 Mission Gallery (Pointers for Screenshots)
+## 📸 Mission Gallery
 
 *   **[Main Menu/Landing]** -
 *   <img width="1710" height="873" alt="Screenshot 2026-05-16 at 11 41 08" src="https://github.com/user-attachments/assets/a9712c9d-572a-46f9-a49d-b28a6a7d331f" />
