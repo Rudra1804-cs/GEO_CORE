@@ -564,20 +564,44 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-neutral-200 font-sans selection:bg-emerald-500/30 overflow-hidden flex flex-col">
+    <div className="h-[100dvh] bg-[#0a0a0a] text-neutral-200 font-sans selection:bg-emerald-500/30 overflow-hidden flex flex-col">
       {/* Header / Mission Control Bar */}
-      <header className="h-16 border-b border-neutral-800 bg-[#121212]/80 backdrop-blur-md flex items-center px-6 justify-between z-10">
-        <div className="flex items-center gap-3 relative">
-          <div className="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-500">
-            <Globe className="w-5 h-5" />
+      <header className="h-auto lg:h-16 border-b border-neutral-800 bg-[#121212]/80 backdrop-blur-md flex flex-col lg:flex-row items-center px-4 lg:px-6 py-1 lg:py-0 justify-between z-10 gap-1 lg:gap-0 shrink-0">
+        <div className="flex items-center justify-between w-full lg:w-auto gap-3 relative shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-500">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="font-bold text-sm tracking-tight text-white uppercase">GEO_CORE <span className="text-emerald-500">v2.0</span></h1>
+              {user && (
+                <p className="text-[8px] text-neutral-500 font-mono uppercase tracking-widest truncate max-w-[120px] hidden sm:block">
+                  Agent: {user.email?.split('@')[0]}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="hidden sm:block">
-            <h1 className="font-bold text-sm tracking-tight text-white uppercase">GEO_CORE <span className="text-emerald-500">v2.0</span></h1>
-            {user && (
-              <p className="text-[8px] text-neutral-500 font-mono uppercase tracking-widest truncate max-w-[120px]">
-                Agent: {user.email?.split('@')[0]}
-              </p>
-            )}
+
+          <div className="flex lg:hidden items-center gap-1.5">
+             <button 
+                onClick={() => setShowRecordsView(!showRecordsView)}
+                className="p-1 text-neutral-500 hover:text-white"
+              >
+                <Trophy className="w-3.5 h-3.5" />
+            </button>
+             <button 
+              onClick={() => setShowHelpModal(true)}
+              className="p-1 text-neutral-500 hover:text-white"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+             <button 
+              onClick={finishGame}
+              disabled={isFinished || guessedIds.size === 0}
+              className="px-2 py-0.5 bg-neutral-100 text-neutral-900 rounded font-black text-[7px] uppercase tracking-widest disabled:opacity-50"
+            >
+              FIN
+            </button>
           </div>
 
           <AnimatePresence>
@@ -602,14 +626,14 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center justify-between lg:justify-end w-full lg:w-auto gap-2 lg:gap-6 shrink-0">
           {!hasStarted && !isFinished && (
-            <div className="flex items-center gap-3">
-              <div className="flex bg-neutral-900/50 rounded-lg p-1 border border-neutral-800">
+            <div className="flex items-center gap-1.5 lg:gap-3 scale-90 lg:scale-100">
+              <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
                 <button 
                   onClick={() => setGameMode('zen')}
                   className={cn(
-                    "px-3 py-1 rounded text-[10px] font-bold uppercase transition-all",
+                    "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
                     gameMode === 'zen' ? "bg-emerald-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
                   )}
                 >
@@ -618,11 +642,11 @@ export default function App() {
                 <button 
                   onClick={() => setGameMode('challenge')}
                   className={cn(
-                    "px-3 py-1 rounded text-[10px] font-bold uppercase transition-all",
+                    "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
                     gameMode === 'challenge' ? "bg-amber-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
                   )}
                 >
-                  Challenge
+                  Hard
                 </button>
               </div>
 
@@ -630,7 +654,7 @@ export default function App() {
                 <select 
                   value={selectedDuration}
                   onChange={(e) => setSelectedDuration(Number(e.target.value))}
-                  className="bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-[10px] font-mono text-amber-500 outline-hidden"
+                  className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-amber-500 outline-hidden"
                 >
                   {[1, 2, 5, 10, 15, 20, 30, 45, 60].map(m => (
                     <option key={m} value={m}>{m}m</option>
@@ -640,29 +664,33 @@ export default function App() {
             </div>
           )}
 
-          <button 
-                onClick={() => {
-                  if (!user && !isGuest) {
-                    setFeedback({ text: 'Access Denied: Authentication required.', type: 'info' });
-                    setTimeout(() => setFeedback(null), 3000);
-                    return;
-                  }
-                  if (showRecordsView) {
-                    resetGame();
-                  } else {
-                    setShowRecordsView(true);
-                  }
-                }}
-                className={cn(
-                  "px-4 py-1.5 rounded font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
-                  showRecordsView ? "bg-emerald-500 text-black shadow-lg" : "bg-neutral-800 text-neutral-400 hover:text-white"
-                )}
-              >
-                <Trophy className="w-3 h-3" />
-                {showRecordsView ? "BACK TO MAP" : "RECORDS"}
-          </button>
+          <div className="flex items-center gap-2 lg:gap-4 ml-auto lg:ml-0">
+            <div className="flex flex-col items-end min-w-[40px] lg:min-w-[80px]">
+                <span className="text-[7px] lg:text-[10px] text-neutral-500 font-mono uppercase leading-none">Stats</span>
+                <div className="flex items-center gap-1 text-white font-mono leading-none">
+                  <Globe2 className="w-2.5 h-2.5 lg:w-4 lg:h-4 text-cyan-500" />
+                  <span className="text-[12px] lg:text-lg">{percentageCovered.toFixed(0)}%</span>
+                </div>
+            </div>
 
-          <div className="flex items-center">
+            <div className="flex flex-col items-end min-w-[40px] lg:min-w-[80px]">
+                <span className="text-[7px] lg:text-[10px] text-neutral-500 font-mono uppercase leading-none">Time</span>
+                <div className="flex items-center gap-1 text-white font-mono leading-none">
+                  <Timer className="w-2.5 h-2.5 lg:w-4 lg:h-4 text-emerald-500" />
+                  <span className="text-[12px] lg:text-lg">{gameMode === 'challenge' ? formatTime(timeLeft) : formatTime(timeElapsed)}</span>
+                </div>
+            </div>
+              
+            <div className="flex flex-col items-end min-w-[50px] lg:min-w-[80px]">
+              <span className="text-[7px] lg:text-[10px] text-neutral-500 font-mono uppercase leading-none">Score</span>
+              <div className="flex items-center gap-1 text-white font-mono leading-none">
+                <Trophy className="w-2.5 h-2.5 lg:w-4 lg:h-4 text-yellow-500" />
+                <span className="text-[12px] lg:text-lg truncate">{score.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
                 <div className="px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase flex items-center gap-2">
@@ -699,72 +727,78 @@ export default function App() {
                 </button>
               </div>
             )}
-          </div>
-            
-            <div className="flex flex-col items-end min-w-[80px]">
-            <span className="text-[10px] text-neutral-500 font-mono uppercase">Protocol Time</span>
-            <div className="flex items-center gap-2 text-white font-mono">
-              <Timer className="w-4 h-4 text-emerald-500" />
-              <span className="text-lg">{gameMode === 'challenge' ? formatTime(timeLeft) : formatTime(timeElapsed)}</span>
-            </div>
-          </div>
-          
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] text-neutral-500 font-mono uppercase">Retrieval Score</span>
-            <div className="flex items-center gap-2 text-white font-mono">
-              <Trophy className="w-4 h-4 text-yellow-500" />
-              <span className="text-lg">{score.toLocaleString()}</span>
-            </div>
-          </div>
 
-          <button 
-            onClick={() => setShowHelpModal(true)}
-            className="p-2 text-neutral-500 hover:text-white transition-colors"
-            title="How to play"
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
+             <button 
+                onClick={() => {
+                  if (!user && !isGuest) {
+                    setFeedback({ text: 'Access Denied: Authentication required.', type: 'info' });
+                    setTimeout(() => setFeedback(null), 3000);
+                    return;
+                  }
+                  if (showRecordsView) {
+                    resetGame();
+                  } else {
+                    setShowRecordsView(true);
+                  }
+                }}
+                className={cn(
+                  "px-4 py-1.5 rounded font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2",
+                  showRecordsView ? "bg-emerald-500 text-black shadow-lg" : "bg-neutral-800 text-neutral-400 hover:text-white"
+                )}
+              >
+                <Trophy className="w-3 h-3" />
+                {showRecordsView ? "BACK" : "RECORDS"}
+            </button>
 
-          <button 
-            onClick={finishGame}
-            disabled={isFinished || guessedIds.size === 0}
-            className="px-4 py-2 bg-neutral-100 hover:bg-white text-neutral-900 rounded font-bold text-xs uppercase tracking-widest transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Final Submit
-          </button>
+            <button 
+              onClick={() => setShowHelpModal(true)}
+              className="p-2 text-neutral-500 hover:text-white transition-colors"
+              title="How to play"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
+
+            <button 
+              onClick={finishGame}
+              disabled={isFinished || guessedIds.size === 0}
+              className="px-4 py-2 bg-neutral-100 hover:bg-white text-neutral-900 rounded font-bold text-xs uppercase tracking-widest transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Submit
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden relative flex">
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
         {/* Sidebar Controls */}
-        <aside className="w-80 border-right border-neutral-800 flex flex-col bg-[#121212]/50">
-          <div className="p-6 space-y-6">
+        <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 shrink-0 max-h-fit lg:max-h-full z-20">
+          <div className="p-2 lg:p-6 space-y-2 lg:space-y-6">
             <AnimatePresence mode="wait">
-              <motion.div key="search" className="space-y-2">
-                <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Input Country Name</label>
+              <motion.div key="search" className="space-y-0.5 lg:space-y-2">
+                <label className="text-[8px] lg:text-[10px] text-neutral-500 font-mono uppercase tracking-widest hidden lg:block">Identify Global Territory</label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-500" />
                     <input 
                       type="text"
                       value={inputValue}
                       onChange={handleInputChange}
                       onKeyDown={handleKeyDown}
                       disabled={isFinished}
-                      placeholder="Type country and press Enter..."
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-600"
+                      placeholder="Type country name..."
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-1.5 lg:py-3 pl-9 lg:pl-10 pr-4 text-xs lg:text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-700"
                     />
                   </div>
                 </div>
-                <div className="relative">
+                <div className="relative h-4">
                   <AnimatePresence>
                     {feedback && (
                       <motion.div 
-                        initial={{ opacity: 0, y: -10 }}
+                        initial={{ opacity: 0, y: -5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
+                        exit={{ opacity: 0, y: 5 }}
                         className={cn(
-                          "absolute -bottom-8 left-0 right-0 text-center text-[10px] font-bold uppercase tracking-widest",
+                          "absolute inset-0 text-center text-[10px] font-bold uppercase tracking-widest",
                           feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
                         )}
                       >
@@ -775,40 +809,28 @@ export default function App() {
                 </div>
               </motion.div>
             </AnimatePresence>
+          </div>
 
-            <div className="pt-4 space-y-4">
+          <div className="hidden lg:flex flex-1 flex-col overflow-hidden">
+            <div className="px-6 pb-6 space-y-4">
               <div className="p-4 rounded-xl bg-neutral-900/50 border border-neutral-800/50 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Landmass Coverage</span>
-                  <span className="text-xs font-mono text-emerald-500">{percentageCovered.toFixed(2)}%</span>
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-neutral-500 font-mono uppercase tracking-widest">Landmass Coverage</span>
+                  <span className="font-mono text-emerald-500">{percentageCovered.toFixed(2)}%</span>
                 </div>
                 <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: `${percentageCovered}%` }}
-                    className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                    className="h-full bg-emerald-500"
                   />
                 </div>
-                <div className="flex justify-between items-center pt-2">
-                  <span className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Wealth Retrieval</span>
-                  <span className="text-xs font-mono text-amber-500">{percentageWealthCovered.toFixed(2)}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${percentageWealthCovered}%` }}
-                    className="h-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]"
-                  />
-                </div>
-                <p className="text-[10px] text-neutral-600 font-mono italic">
-                  Extracted {coveredArea.toLocaleString()} km² total area
-                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
                   <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Guessed</span>
-                  <span className="text-xl font-bold flex items-baseline gap-1">
+                  <span className="text-xl font-bold">
                     {guessedIds.size} <span className="text-[9px] font-normal text-neutral-600">/ {COUNTRIES.length}</span>
                   </span>
                 </div>
@@ -820,13 +842,12 @@ export default function App() {
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-4">
-             <div>
-               <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#121212]/50 py-2">Recently Secured</label>
-               <div className="space-y-2">
-                  {[...guessedIds].reverse().slice(0, 15).map(id => {
+            <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide space-y-4">
+               <div>
+                 <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-4 sticky top-0 bg-[#0a0a0a] lg:bg-[#121212] py-2">Secured Zones</label>
+               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                  {[...guessedIds].reverse().slice(0, 10).map(id => {
                     const country = COUNTRIES.find(c => c.id === id);
                     return (
                       <motion.div 
@@ -870,10 +891,20 @@ export default function App() {
                )}
              </AnimatePresence>
           </div>
+          </div>
         </aside>
 
         {/* Map Area */}
-        <section className="flex-1 p-6 flex flex-col gap-6">
+        <section className="flex-1 p-0 lg:p-6 flex flex-col gap-0 lg:gap-6 relative overflow-hidden">
+          {/* Mobile Guessed Button */}
+          <div className="lg:hidden absolute bottom-4 left-4 z-40">
+             <button 
+                onClick={() => setFeedback({ text: `IDENTIFIED: ${guessedIds.size} / ${COUNTRIES.length}`, type: 'info' })}
+                className="w-10 h-10 bg-[#121212]/90 backdrop-blur-md border border-neutral-800 rounded-full flex items-center justify-center text-emerald-500 shadow-2xl"
+             >
+                <CheckCircle2 className="w-5 h-5" />
+             </button>
+          </div>
           <AnimatePresence mode="wait">
             {showRecordsView ? (
               <motion.div 
@@ -881,18 +912,18 @@ export default function App() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="flex-1 bg-[#0a0a0a] border border-neutral-800 rounded-3xl overflow-hidden flex flex-col"
+                className="flex-1 bg-[#0a0a0a] border border-neutral-800 rounded-2xl lg:rounded-3xl overflow-hidden flex flex-col"
               >
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden mb-safe">
                   {/* Records List */}
-                  <div className="w-1/3 border-r border-neutral-800 flex flex-col bg-[#121212]/50">
-                    <div className="p-6 border-b border-neutral-800">
-                      <div className="flex items-center justify-between mb-8">
+                  <div className="w-full lg:w-1/3 border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 max-h-[30vh] lg:max-h-full overflow-hidden">
+                    <div className="p-4 lg:p-6 border-b border-neutral-800">
+                      <div className="flex items-center justify-between mb-4 lg:mb-8">
                         <div>
-                          <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">Mission Archive</h2>
+                          <h2 className="text-xl lg:text-3xl font-black text-white uppercase tracking-tighter italic">Mission Archive</h2>
                           <div className="flex items-center gap-2 mt-1">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] text-emerald-500/80 font-mono uppercase tracking-widest">
+                            <span className="text-[8px] text-emerald-500/80 font-mono uppercase tracking-widest">
                               {isAdmin ? 'Global Intelligence Access Active' : 'Personal Records Secure'}
                             </span>
                           </div>
@@ -902,14 +933,14 @@ export default function App() {
                             setShowRecordsView(false);
                             if (isFinished) setShowResults(true);
                           }}
-                          className="p-3 bg-neutral-900 border border-neutral-800 rounded-xl hover:bg-neutral-800 transition-colors"
+                          className="p-2 lg:p-3 bg-neutral-900 border border-neutral-800 rounded-xl hover:bg-neutral-800 transition-colors"
                         >
-                          <XCircle className="w-5 h-5 text-neutral-500" />
+                          <XCircle className="w-4 h-4 lg:w-5 lg:h-5 text-neutral-500" />
                         </button>
                       </div>
                       
                       {isAdmin && (
-                        <div className="mb-6">
+                        <div className="mb-4">
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500" />
                             <input 
@@ -925,9 +956,8 @@ export default function App() {
 
                       <div className="flex items-center gap-2">
                         <Trophy className="w-4 h-4 text-emerald-500" />
-                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">Mission Logs</h2>
+                        <h2 className="text-lg lg:text-xl font-black text-white uppercase tracking-tighter">Mission Logs</h2>
                       </div>
-                      <p className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Archive of previous territorial runs</p>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                       {leaderboard.map((entry, i) => (
@@ -992,7 +1022,7 @@ export default function App() {
                   </div>
 
                   {/* Record Details / Analysis */}
-                  <div className="flex-1 flex flex-col bg-[#0a0a0a]">
+                  <div className="flex-1 flex flex-col bg-[#0a0a0a] min-h-0 overflow-y-auto">
                     <AnimatePresence mode="wait">
                       {selectedRecordIndex !== null && leaderboard[selectedRecordIndex] ? (
                         <motion.div 
@@ -1000,9 +1030,9 @@ export default function App() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           exit={{ opacity: 0 }}
-                          className="flex-1 flex flex-col p-8 gap-8"
+                          className="flex-1 flex flex-col p-4 lg:p-8 gap-4 lg:gap-8"
                         >
-                          <div className="flex-1 relative bg-neutral-900/50 rounded-3xl border border-neutral-800/50 overflow-hidden shadow-inner order-first min-h-[400px]">
+                          <div className="flex-1 relative bg-neutral-900/50 rounded-2xl lg:rounded-3xl border border-neutral-800/50 overflow-hidden shadow-inner order-first min-h-[300px] lg:min-h-[400px]">
                              <WorldMap 
                                guessedIds={new Set(leaderboard[selectedRecordIndex].guessedIds || [])}
                                highlightedId={null}
@@ -1255,9 +1285,9 @@ export default function App() {
                       <span className="text-[10px] text-neutral-600 font-mono italic">Select a sector to deploy detailed surveillance map</span>
                     </div>
                     
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-8">
                       {/* Left: Sector Selection Grid */}
-                      <div className="lg:col-span-1 grid grid-cols-1 gap-2 max-h-[550px] overflow-y-auto pr-2 custom-scrollbar">
+                      <div className="lg:col-span-1 grid grid-cols-2 lg:grid-cols-1 gap-2 max-h-[200px] lg:max-h-[550px] overflow-y-auto pr-2 custom-scrollbar">
                         {Object.entries(CONTINENT_STATS).map(([name, stats]) => {
                           const contData = continentStats[name];
                           const efficiency = (contData.guessed / contData.total) * 100;
@@ -1442,13 +1472,13 @@ export default function App() {
                         </button>
                         <button 
                           onClick={resetGame}
-                          className="flex-1 py-4 bg-black text-emerald-500 font-extrabold uppercase tracking-widest text-[10px] rounded-2xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                          className="flex-1 py-3 lg:py-4 bg-black text-emerald-500 font-extrabold uppercase tracking-widest text-[9px] lg:text-[10px] rounded-xl lg:rounded-2xl transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
                         >
-                          <RefreshCcw className="w-4 h-4" /> Reset Sync
+                          <RefreshCcw className="w-3 h-3 lg:w-4 lg:h-4" /> Reset
                         </button>
                         <button 
                           onClick={() => setShowResults(false)}
-                          className="px-6 py-4 bg-emerald-600 text-emerald-950 font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-emerald-600/80 transition-all"
+                          className="px-4 lg:px-6 py-3 lg:py-4 bg-emerald-600 text-emerald-950 font-black uppercase tracking-widest text-[9px] lg:text-[10px] rounded-xl lg:rounded-2xl hover:bg-emerald-600/80 transition-all"
                         >
                           Review
                         </button>

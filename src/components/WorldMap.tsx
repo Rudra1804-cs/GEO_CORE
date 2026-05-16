@@ -186,8 +186,11 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
     svg.call(zoomListener);
 
     // Initial transform to center Asia
-    const k = 1.35;
-    const centerPoint = projection([95, 30])!; // Center of Asia roughly
+    const isMobile = width < 768;
+    const isPortrait = height > width;
+    const k = isPortrait ? 1.45 : (isMobile ? 1.1 : 1.35);
+    const centerCoords: [number, number] = isPortrait ? [20, 20] : (isMobile ? [30, 20] : [95, 30]);
+    const centerPoint = projection(centerCoords)!;
     const tx = width / 2 - centerPoint[0] * k;
     const ty = height / 2 - centerPoint[1] * k;
     const initialTransform = d3.zoomIdentity.translate(tx, ty).scale(k);
@@ -355,26 +358,26 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       );
 
       if (continentFeatures.length > 0) {
+        const isMobile = width < 768;
         const projection = d3.geoMercator()
           .scale(width / 2 / Math.PI)
           .translate([width / 2, height / 2])
           .rotate([10, 0])
-          .precision(0.1); // Keep same base rotation for consistency if possible, fitExtent overrides mostly
+          .precision(0.1);
 
-        let padding = 60;
+        let padding = isMobile ? 20 : 60;
         
         // Special Framing Logic
         if (focusedContinent === 'North America') {
-          // Increase padding at top to bring Caribbean/Central America into better view
-          padding = 100;
+          padding = isMobile ? 30 : 100;
         } else if (focusedContinent === 'Europe') {
-          padding = 80;
+          padding = isMobile ? 20 : 80;
         } else if (focusedContinent === 'Asia') {
-          padding = 40;
+          padding = isMobile ? 15 : 40;
         } else if (focusedContinent === 'Oceania') {
-          padding = 120;
+          padding = isMobile ? 40 : 120;
         } else if (focusedContinent === 'Antarctica') {
-          padding = 150;
+          padding = isMobile ? 60 : 150;
         }
 
         projection.fitExtent([[padding, padding], [width - padding, height - padding]], {
