@@ -18,6 +18,7 @@ import {
   RefreshCcw,
   Flag,
   Globe2,
+  TrendingUp,
   LayoutDashboard,
   Trash2,
   Volume2,
@@ -261,7 +262,21 @@ export default function App() {
     }, 0);
   }, [guessedIds]);
 
-  const percentageCovered = (coveredArea / TOTAL_LAND_AREA) * 100;
+  const continentTotals = useMemo(() => {
+    const totals: Record<string, { area: number; gdp: number; total: number }> = {};
+    COUNTRIES.forEach(c => {
+      if (!totals[c.continent]) totals[c.continent] = { area: 0, gdp: 0, total: 0 };
+      totals[c.continent].area += c.area;
+      totals[c.continent].gdp += (c.gdp || 0);
+      totals[c.continent].total += 1;
+    });
+    return totals;
+  }, []);
+
+  const totalPossibleArea = useMemo(() => COUNTRIES.reduce((acc, c) => acc + c.area, 0), []);
+  const totalPossibleGdp = useMemo(() => COUNTRIES.reduce((acc, c) => acc + (c.gdp || 0), 0), []);
+
+  const percentageCovered = (coveredArea / totalPossibleArea) * 100;
   
   const coveredWealth = useMemo(() => {
     return Array.from(guessedIds).reduce((acc: number, id) => {
@@ -270,7 +285,7 @@ export default function App() {
     }, 0);
   }, [guessedIds]);
 
-  const percentageWealthCovered = (coveredWealth / TOTAL_GLOBAL_GDP) * 100;
+  const percentageWealthCovered = (coveredWealth / totalPossibleGdp) * 100;
   
   const continentStats = useMemo(() => {
     const stats: Record<string, { guessed: number; total: number; areaGuessed: number; gdpGuessed: number; guessedList: CountryData[]; missedList: CountryData[] }> = {};
@@ -327,6 +342,13 @@ export default function App() {
   }, [startTime, isFinished, gameMode]);
 
   // Scoring logic
+  const getCountryPoints = (country: CountryData) => {
+    // Fixed points based on name length and 'uniqueness' (inverse of area)
+    const nameWeight = country.name.length * 150;
+    const uniquenessWeight = Math.floor(25000 / Math.pow((country.area + 1), 0.25));
+    return nameWeight + uniquenessWeight;
+  };
+
   const currentMultiplier = useMemo(() => {
     if (gameMode === 'zen') {
       return Math.max(0.1, 1 - (timeElapsed / 3600)); // Depletes over 1 hour
@@ -403,16 +425,8 @@ export default function App() {
         }
         
         // Scoring logic
-        // Reworked scoring: Mix of Landmass (25%), GDP (25%), Count (25%), and Time Efficiency (25%)
-        const landmassScore = (matchedCountry.area / TOTAL_LAND_AREA) * 250000;
-        const gdpScore = (matchedCountry.gdp / TOTAL_GLOBAL_GDP) * 250000;
-        const countScore = (1 / COUNTRIES.length) * 250000;
-        
-        // Bonus for harder (smaller) countries
-        const difficultyBonus = matchedCountry.area < 50000 ? 5000 : 
-                                 matchedCountry.area < 200000 ? 2500 : 500;
-        
-        const points = Math.floor((landmassScore + gdpScore + countScore + difficultyBonus) * currentMultiplier);
+        const basePoints = getCountryPoints(matchedCountry);
+        const points = Math.floor(basePoints * currentMultiplier);
 
         setScore(prev => prev + points);
 
@@ -814,16 +828,34 @@ export default function App() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="hidden lg:block px-6 pb-6 space-y-4">
               <div className="p-4 rounded-xl bg-neutral-900/50 border border-neutral-800/50 space-y-3">
-                <div className="flex justify-between items-center text-[10px]">
-                  <span className="text-neutral-500 font-mono uppercase tracking-widest">Landmass Coverage</span>
-                  <span className="font-mono text-emerald-500">{percentageCovered.toFixed(2)}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${percentageCovered}%` }}
-                    className="h-full bg-emerald-500"
-                  />
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-neutral-500 font-mono uppercase tracking-widest">Landmass Coverage</span>
+                      <span className="font-mono text-emerald-500">{guessedIds.size === COUNTRIES.length ? '100' : Math.min(99.99, percentageCovered).toFixed(2)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percentageCovered}%` }}
+                        className="h-full bg-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-yellow-500/70 font-mono uppercase tracking-widest">Wealth Retrieval</span>
+                      <span className="font-mono text-yellow-500">{percentageWealthCovered.toFixed(2)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percentageWealthCovered}%` }}
+                        className="h-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.3)]"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -864,7 +896,7 @@ export default function App() {
                           />
                           <span className="truncate">{country?.name}</span>
                         </div>
-                        <span className="text-[9px] text-emerald-500 font-mono font-bold">+{Math.floor((country?.area || 0) / 1000 * currentMultiplier)} pts</span>
+                        <span className="text-[9px] text-emerald-500 font-mono font-bold">+{getCountryPoints(country!)} pts</span>
                       </motion.div>
                     );
                   })}
@@ -1287,44 +1319,100 @@ export default function App() {
                     
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-8">
                       {/* Left: Sector Selection Grid */}
-                      <div className="lg:col-span-1 grid grid-cols-2 lg:grid-cols-1 gap-2 max-h-[200px] lg:max-h-[550px] overflow-y-auto pr-2 custom-scrollbar">
-                        {Object.entries(CONTINENT_STATS).map(([name, stats]) => {
-                          const contData = continentStats[name];
-                          const efficiency = (contData.guessed / contData.total) * 100;
-                          const isSelected = focusedContinent === name;
+                      <div className="lg:col-span-1 flex flex-col gap-4 overflow-hidden">
+                        <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 overflow-y-auto pr-2 custom-scrollbar lg:max-h-[300px]">
+                          {Object.entries(CONTINENT_STATS).map(([name, stats]) => {
+                            const contData = continentStats[name];
+                            const efficiency = (contData.guessed / contData.total) * 100;
+                            const isSelected = focusedContinent === name;
 
-                          return (
-                            <button
-                              key={name}
-                              onClick={() => setFocusedContinent(isSelected ? null : name)}
-                              className={cn(
-                                "text-left p-3 rounded-xl border transition-all relative overflow-hidden group font-mono",
-                                isSelected ? "bg-emerald-500 border-emerald-400 scale-[1.02]" : "bg-neutral-900 border-neutral-800 hover:border-neutral-700"
-                              )}
-                            >
-                              <div className="relative z-10 flex items-center justify-between">
-                                <div className="space-y-0.5">
-                                  <span className={cn("text-[8px] font-black uppercase tracking-widest", isSelected ? "text-emerald-950" : "text-neutral-500")}>
-                                    {stats.name}
-                                  </span>
-                                  <div className={cn("text-xs font-black", isSelected ? "text-emerald-950" : "text-white")}>
-                                    {contData.guessed} <span className="opacity-40">/</span> {contData.total}
+                            return (
+                              <button
+                                key={name}
+                                onClick={() => setFocusedContinent(isSelected ? null : name)}
+                                className={cn(
+                                  "text-left p-3 rounded-xl border transition-all relative overflow-hidden group font-mono",
+                                  isSelected ? "bg-emerald-500 border-emerald-400 scale-[1.02]" : "bg-neutral-900 border-neutral-800 hover:border-neutral-700"
+                                )}
+                              >
+                                <div className="relative z-10 flex items-center justify-between">
+                                  <div className="space-y-0.5">
+                                    <span className={cn("text-[8px] font-black uppercase tracking-widest", isSelected ? "text-emerald-950" : "text-neutral-500")}>
+                                      {stats.name}
+                                    </span>
+                                    <div className={cn("text-xs font-black", isSelected ? "text-emerald-950" : "text-white")}>
+                                      {contData.guessed} <span className="opacity-40">/</span> {contData.total}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className={cn("text-sm font-black", isSelected ? "text-emerald-950" : stats.color)}>
+                                      {Math.round(efficiency)}%
+                                    </span>
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <span className={cn("text-sm font-black", isSelected ? "text-emerald-950" : stats.color)}>
-                                    {Math.floor(efficiency)}%
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <AnimatePresence>
+                          {focusedContinent && (
+                            <motion.div
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -20 }}
+                              className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 space-y-4"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest">Territory</span>
+                                  <span className="text-[10px] text-white font-mono">
+                                    {Math.round((continentStats[focusedContinent].areaGuessed / (continentTotals[focusedContinent]?.area || 1)) * 100)}%
                                   </span>
                                 </div>
+                                <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                  <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(continentStats[focusedContinent].areaGuessed / (continentTotals[focusedContinent]?.area || 1)) * 100}%` }}
+                                    className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                                  />
+                                </div>
                               </div>
-                            </button>
-                          );
-                        })}
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest">Economy</span>
+                                  <span className="text-[10px] text-emerald-500 font-mono">
+                                    {(continentTotals[focusedContinent]?.gdp || 0) > 0 
+                                      ? Math.round((continentStats[focusedContinent].gdpGuessed / continentTotals[focusedContinent].gdp) * 100)
+                                      : 0}%
+                                  </span>
+                                </div>
+                                <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                  <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(continentTotals[focusedContinent]?.gdp || 0) > 0 ? (continentStats[focusedContinent].gdpGuessed / continentTotals[focusedContinent].gdp) * 100 : 0}%` }}
+                                    className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                  />
+                                </div>
+                              </div>
+                              <div className="pt-2 border-t border-neutral-800 grid grid-cols-1 gap-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[7px] text-neutral-600 font-mono">LANDMASS</span>
+                                  <span className="text-[8px] text-neutral-400 font-mono">{(continentStats[focusedContinent].areaGuessed / 1000).toLocaleString()}K KM²</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[7px] text-neutral-600 font-mono">OUTPUT</span>
+                                  <span className="text-[8px] text-emerald-600 font-mono">${(continentStats[focusedContinent].gdpGuessed / 1000).toFixed(1)}B</span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
 
                       {/* Right: Detailed Continent Analysis Rendering */}
                       <div className="lg:col-span-3 space-y-6">
-                        <div className="bg-neutral-900/50 border border-neutral-800 rounded-3xl overflow-hidden relative h-[350px] shadow-inner">
+                        <div className="bg-neutral-900/50 border border-neutral-800 rounded-3xl overflow-hidden relative h-[450px] shadow-inner">
                           {focusedContinent ? (
                             <div className="absolute inset-0 flex flex-col">
                                 <div className="p-3 bg-black/40 border-b border-neutral-800 flex justify-between items-center backdrop-blur-sm z-10">
@@ -1373,51 +1461,53 @@ export default function App() {
                           <motion.div 
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[200px]"
+                            className="space-y-4"
                           >
-                            <div className="flex flex-col bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden font-mono">
-                              <div className="px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20 flex justify-between items-center">
-                                <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Identified</span>
-                                <span className="text-[9px] font-bold text-emerald-600">{continentStats[focusedContinent].guessedList.length} Units</span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[200px]">
+                              <div className="flex flex-col bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden font-mono">
+                                <div className="px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20 flex justify-between items-center">
+                                  <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Identified</span>
+                                  <span className="text-[9px] font-bold text-emerald-600">{continentStats[focusedContinent].guessedList.length} Units</span>
+                                </div>
+                                <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1">
+                                  {continentStats[focusedContinent].guessedList.map(c => (
+                                    <div key={c.id} title={c.name} className="px-2 py-1.5 rounded bg-emerald-500/5 border border-emerald-500/10 text-[10px] text-emerald-200/80 flex items-center gap-2 group hover:bg-emerald-500/10 transition-colors">
+                                      <img 
+                                        src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`} 
+                                        className="w-4 h-3 rounded-sm object-cover border border-white/10"
+                                        alt="" 
+                                      />
+                                      <span className="truncate flex-1">{c.name}</span>
+                                      <span className="text-[8px] opacity-50 font-mono">${Math.floor(c.gdp).toLocaleString()}M</span>
+                                    </div>
+                                  ))}
+                                  {continentStats[focusedContinent].guessedList.length === 0 && (
+                                    <div className="flex items-center justify-center h-full text-[9px] text-neutral-600 italic">No sectors reclaimed</div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1">
-                                {continentStats[focusedContinent].guessedList.map(c => (
-                                  <div key={c.id} title={c.name} className="px-2 py-1.5 rounded bg-emerald-500/5 border border-emerald-500/10 text-[10px] text-emerald-200/80 flex items-center gap-2 group hover:bg-emerald-500/10 transition-colors">
-                                    <img 
-                                      src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`} 
-                                      className="w-4 h-3 rounded-sm object-cover border border-white/10"
-                                      alt="" 
-                                    />
-                                    <span className="truncate flex-1">{c.name}</span>
-                                    <span className="text-[8px] opacity-50 font-mono">${Math.floor(c.gdp).toLocaleString()}M</span>
-                                  </div>
-                                ))}
-                                {continentStats[focusedContinent].guessedList.length === 0 && (
-                                  <div className="flex items-center justify-center h-full text-[9px] text-neutral-600 italic">No sectors reclaimed</div>
-                                )}
-                              </div>
-                            </div>
 
-                            <div className="flex flex-col bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden font-mono text-sm">
-                              <div className="px-4 py-2 bg-rose-500/10 border-b border-rose-500/20 flex justify-between items-center">
-                                <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Missing Coverage</span>
-                                <span className="text-[9px] font-bold text-rose-600">{continentStats[focusedContinent].missedList.length} Units</span>
-                              </div>
-                              <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1">
-                                {continentStats[focusedContinent].missedList.map(c => (
-                                  <div key={c.id} title={c.name} className="px-2 py-1.5 rounded bg-rose-500/5 border border-rose-500/10 text-[10px] text-rose-200/80 flex items-center gap-2 group hover:bg-rose-500/10 transition-colors">
-                                    <img 
-                                      src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`} 
-                                      className="w-4 h-3 rounded-sm object-cover border border-white/10"
-                                      alt="" 
-                                    />
-                                    <span className="truncate flex-1">{c.name}</span>
-                                    <span className="text-[8px] opacity-50 font-mono">${Math.floor(c.gdp).toLocaleString()}M</span>
-                                  </div>
-                                ))}
-                                {continentStats[focusedContinent].missedList.length === 0 && (
-                                  <div className="flex items-center justify-center h-full text-[9px] text-emerald-500 italic font-black uppercase">100% Regional Capture</div>
-                                )}
+                              <div className="flex flex-col bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden font-mono text-sm">
+                                <div className="px-4 py-2 bg-rose-500/10 border-b border-rose-500/20 flex justify-between items-center">
+                                  <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Missing Coverage</span>
+                                  <span className="text-[9px] font-bold text-rose-600">{continentStats[focusedContinent].missedList.length} Units</span>
+                                </div>
+                                <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-1">
+                                  {continentStats[focusedContinent].missedList.map(c => (
+                                    <div key={c.id} title={c.name} className="px-2 py-1.5 rounded bg-rose-500/5 border border-rose-500/10 text-[10px] text-rose-200/80 flex items-center gap-2 group hover:bg-rose-500/10 transition-colors">
+                                      <img 
+                                        src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`} 
+                                        className="w-4 h-3 rounded-sm object-cover border border-white/10"
+                                        alt="" 
+                                      />
+                                      <span className="truncate flex-1">{c.name}</span>
+                                      <span className="text-[8px] opacity-50 font-mono">${Math.floor(c.gdp).toLocaleString()}M</span>
+                                    </div>
+                                  ))}
+                                  {continentStats[focusedContinent].missedList.length === 0 && (
+                                    <div className="flex items-center justify-center h-full text-[9px] text-emerald-500 italic font-black uppercase">100% Regional Capture</div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </motion.div>
@@ -1624,6 +1714,72 @@ export default function App() {
                   </div>
 
                   <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                    <AnimatePresence>
+                      {selectedContinentFilter && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden border-b border-neutral-800 bg-neutral-900/50"
+                        >
+                           <div className="p-4 space-y-3">
+                              {(() => {
+                                const continent = selectedContinentFilter;
+                                const continentCountries = COUNTRIES.filter(c => c.continent === continent);
+                                const recordGuessed = viewingRecord.guessedIds || [];
+                                const guessedCountries = continentCountries.filter(c => recordGuessed.includes(c.id));
+                                
+                                const totalArea = continentTotals[continent]?.area || 0;
+                                const coveredArea = guessedCountries.reduce((sum, c) => sum + c.area, 0);
+                                const areaPercent = totalArea > 0 ? (coveredArea / totalArea) * 100 : 0;
+
+                                const totalGdp = continentTotals[continent]?.gdp || 0;
+                                const coveredGdp = guessedCountries.reduce((sum, c) => sum + (c.gdp || 0), 0);
+                                const gdpPercent = totalGdp > 0 ? (coveredGdp / totalGdp) * 100 : 0;
+
+                                return (
+                                  <>
+                                    <div className="space-y-1.5">
+                                      <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-neutral-500">
+                                        <span>Territory</span>
+                                        <span className="text-white">{Math.round(areaPercent)}%</span>
+                                      </div>
+                                      <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                        <motion.div 
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${areaPercent}%` }}
+                                          className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                                        />
+                                      </div>
+                                      <div className="flex justify-between items-center text-[7px] text-neutral-600 font-mono">
+                                        <span>LANDMASS</span>
+                                        <span>{(coveredArea / 1000).toLocaleString()}K / {(totalArea / 1000).toLocaleString()}K KM²</span>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1.5 pt-1 border-t border-neutral-800/50">
+                                      <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-emerald-500/70">
+                                        <span>Economy</span>
+                                        <span className="text-emerald-500">{Math.round(gdpPercent)}%</span>
+                                      </div>
+                                      <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
+                                        <motion.div 
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${gdpPercent}%` }}
+                                          className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                        />
+                                      </div>
+                                      <div className="flex justify-between items-center text-[7px] text-emerald-600/60 font-mono">
+                                        <span>OUTPUT</span>
+                                        <span>${(coveredGdp / 1000).toFixed(1)}B / ${(totalGdp / 1000).toFixed(1)}B</span>
+                                      </div>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                           </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
                         <CheckCircle2 className="w-3 h-3" />
@@ -1786,31 +1942,57 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-6 gap-4">
-                 {Object.entries(CONTINENT_STATS).map(([continent]) => {
-                   const totalInContinent = COUNTRIES.filter(c => c.continent === continent).length;
-                   const recordGuessed = viewingRecord.guessedIds || [];
-                   const guessedInContinent = recordGuessed.filter(id => 
-                     COUNTRIES.find(c => c.id === id)?.continent === continent
-                   ).length;
-                   const percentage = (guessedInContinent / totalInContinent) * 100;
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                 {Object.entries(CONTINENT_STATS).filter(([c]) => c !== 'Antarctica').map(([continent]) => {
+                   const totalCountries = continentTotals[continent]?.total || 0;
+                   const guessedCount = viewingRecord.guessedIds?.filter(id => COUNTRIES.find(c => c.id === id)?.continent === continent).length || 0;
+                   const isActive = selectedContinentFilter === continent;
+                   const percentage = totalCountries > 0 ? (guessedCount / totalCountries) * 100 : 0;
                    
                    return (
-                     <div key={continent} className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-2">
-                       <div className="flex justify-between items-center">
-                         <span className="text-[9px] font-black uppercase text-neutral-500 tracking-widest">{continent}</span>
-                         <span className={cn("text-[10px] font-mono", percentage === 100 ? "text-emerald-500" : "text-neutral-400")}>
-                           {guessedInContinent}/{totalInContinent}
+                     <button 
+                       key={continent} 
+                       onClick={() => setSelectedContinentFilter(isActive ? null : continent)}
+                       className={cn(
+                         "p-3 rounded-2xl border transition-all text-left space-y-1 group relative overflow-hidden",
+                         isActive 
+                          ? "bg-neutral-800 border-neutral-600 shadow-[0_0_20px_rgba(0,0,0,0.3)] ring-1 ring-white/10" 
+                          : "bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800/50"
+                       )}
+                     >
+                       <div className="flex justify-between items-center relative z-10">
+                         <span className={cn(
+                           "text-[9px] font-black uppercase tracking-widest transition-colors",
+                           isActive ? "text-white" : "text-neutral-500 group-hover:text-neutral-400"
+                         )}>
+                           {continent}
+                         </span>
+                         <span className={cn(
+                           "text-[10px] font-mono", 
+                           guessedCount === totalCountries ? "text-emerald-500" : "text-neutral-400"
+                         )}>
+                           {guessedCount}/{totalCountries}
                          </span>
                        </div>
-                       <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
-                         <motion.div 
-                           initial={{ width: 0 }}
-                           animate={{ width: `${percentage}%` }}
-                           className={cn("h-full", percentage === 100 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-neutral-600")}
-                         />
+
+                       <div className="h-1 bg-neutral-800/50 rounded-full overflow-hidden mt-1">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${percentage}%` }}
+                            className={cn(
+                              "h-full transition-colors", 
+                              percentage === 100 ? "bg-emerald-500" : "bg-neutral-600"
+                            )}
+                          />
                        </div>
-                     </div>
+
+                       {isActive && (
+                         <motion.div 
+                           layoutId="active-indicator"
+                           className="absolute inset-0 bg-white/5 pointer-events-none"
+                         />
+                       )}
+                     </button>
                    );
                  })}
               </div>
