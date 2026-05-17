@@ -21,7 +21,8 @@ GEO-CORE is a high-precision, interactive world geography simulation designed fo
 *   <img width="1710" height="876" alt="Screenshot 2026-05-16 at 11 43 00" src="https://github.com/user-attachments/assets/56718e9f-7f71-417e-9c69-01e58620973c" />
 
 *   **[Debriefing/Expansion Survey]** - *Insert screenshot of the final results and continent drill-down here*
-*  <img width="3418" height="1748" alt="image" src="https://github.com/user-attachments/assets/84d38c8e-af96-41bf-94e2-e89e455bb212" />
+*  <img width="1710" height="877" alt="2026-05-17_07-26-59" src="https://github.com/user-attachments/assets/e898adc1-b89d-4f49-ac73-a1f3f4cb2238" />
+
 ---
 
 ## 🚀 Advanced Feature Suite
