@@ -1800,7 +1800,7 @@ export default function App() {
                         <>
                           <div className="bg-neutral-900/50 border border-neutral-800/50 p-4 rounded-2xl space-y-3">
                             <div className="flex justify-between items-center text-[9px] font-black uppercase text-neutral-500 tracking-widest">
-                              <span>Territory Secured</span>
+                              <span>{isGlobal ? "Global" : continent} Secured</span>
                               <span className="text-white">{Math.round(areaPercent)}%</span>
                             </div>
                             <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
