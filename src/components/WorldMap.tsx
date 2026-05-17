@@ -20,6 +20,7 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
   const countriesDataRef = useRef<any>(null);
   const isFinishedRef = useRef(isFinished);
   const projectionRef = useRef<d3.GeoProjection | null>(null);
+  const zoomListenerRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [tooltip, setTooltip] = useState<{ name: string; x: number; y: number } | null>(null);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -183,6 +184,7 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
         g.attr('transform', `translate(${x}, ${y}) scale(${k})`);
       });
 
+    zoomListenerRef.current = zoomListener;
     svg.call(zoomListener);
 
     // Initial transform to center Asia
@@ -312,6 +314,64 @@ export function WorldMap({ guessedIds, highlightedId, isFinished, focusedContine
       isCancelled = true;
       resizeObserver.disconnect();
     };
+  }, []);
+
+  const activeKeys = useRef<Set<string>>(new Set());
+
+  // Track active keys for smooth movement
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT') return;
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '_'].includes(e.key)) {
+        activeKeys.current.add(e.key);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      activeKeys.current.delete(e.key);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Smooth animation loop for map movement
+  useEffect(() => {
+    let animationFrameId: number;
+    const tick = () => {
+      if (activeKeys.current.size > 0 && svgRef.current && zoomListenerRef.current) {
+        const svg = d3.select(svgRef.current);
+        const zoomListener = zoomListenerRef.current;
+        
+        let dx = 0;
+        let dy = 0;
+        let scaleFactor = 1;
+        
+        // Dynamic speed based on current zoom level could be better, but let's start with constants
+        const panStep = 6;
+        const zoomStep = 1.02;
+
+        if (activeKeys.current.has('ArrowLeft')) dx += panStep;
+        if (activeKeys.current.has('ArrowRight')) dx -= panStep;
+        if (activeKeys.current.has('ArrowUp')) dy += panStep;
+        if (activeKeys.current.has('ArrowDown')) dy -= panStep;
+        
+        if (activeKeys.current.has('+') || activeKeys.current.has('=')) scaleFactor *= zoomStep;
+        if (activeKeys.current.has('-') || activeKeys.current.has('_')) scaleFactor /= zoomStep;
+
+        if (dx !== 0 || dy !== 0) {
+          svg.call(zoomListener.translateBy, dx, dy);
+        }
+        if (scaleFactor !== 1) {
+          svg.call(zoomListener.scaleBy, scaleFactor);
+        }
+      }
+      animationFrameId = requestAnimationFrame(tick);
+    };
+    animationFrameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
   // Use mapLoaded to trigger color updates

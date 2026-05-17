@@ -109,6 +109,8 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [showRecordsView, setShowRecordsView] = useState(false);
   const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
+  const [recordTerritorySearch, setRecordTerritorySearch] = useState('');
+  const [expansionSearch, setExpansionSearch] = useState('');
   const [score, setScore] = useState(0);
   const [activeFlag, setActiveFlag] = useState<string | null>(null);
   const savingRef = useRef(false);
@@ -369,6 +371,14 @@ export default function App() {
         setIsSatelliteView(prev => !prev);
       }
 
+      // Toggle Pause with Alt key (Option)
+      if (e.key === 'Alt') {
+        if (hasStarted && !isFinished) {
+          e.preventDefault();
+          setIsPaused(prev => !prev);
+        }
+      }
+
       // Focus input on Enter or Space if not in a modal/paused state
       if ((e.key === 'Enter' || e.key === ' ') && !isPaused && !isFinished && !showNamePrompt && !showResults && !showRecordsView) {
         // Only focus and prevent default if not already typing in an input
@@ -381,7 +391,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isPaused, isFinished, showNamePrompt, showResults, showRecordsView, setIsSatelliteView]);
+  }, [isPaused, isFinished, showNamePrompt, showResults, showRecordsView, setIsSatelliteView, hasStarted, setIsPaused]);
 
   // Scoring logic
   const getCountryPoints = (country: CountryData) => {
@@ -618,6 +628,8 @@ export default function App() {
     setShowResults(false);
     setShowNamePrompt(false);
     setScore(0);
+    setRecordTerritorySearch('');
+    setExpansionSearch('');
     setCompletionTime(null);
     setFocusedContinent(null);
     setInputValue('');
@@ -1121,6 +1133,7 @@ export default function App() {
                         <button 
                           onClick={() => {
                             setShowRecordsView(false);
+                            setRecordTerritorySearch('');
                             if (isFinished) setShowResults(true);
                           }}
                           className="p-2 lg:p-3 bg-neutral-900 border border-neutral-800 rounded-xl hover:bg-neutral-800 transition-colors"
@@ -1155,8 +1168,16 @@ export default function App() {
                           key={entry.id || `${entry.name}-${i}`}
                           role="button"
                           tabIndex={0}
-                          onClick={() => setSelectedRecordIndex(i)}
-                          onKeyDown={(e) => e.key === 'Enter' && setSelectedRecordIndex(i)}
+                          onClick={() => {
+                            setSelectedRecordIndex(i);
+                            setRecordTerritorySearch('');
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setSelectedRecordIndex(i);
+                              setRecordTerritorySearch('');
+                            }
+                          }}
                           className={cn(
                             "w-full flex items-center justify-between p-4 rounded-2xl transition-all border group relative overflow-hidden cursor-pointer outline-none",
                             selectedRecordIndex === i 
@@ -1225,7 +1246,12 @@ export default function App() {
                           <div className="flex-1 relative bg-neutral-900/50 rounded-2xl lg:rounded-3xl border border-neutral-800/50 overflow-hidden shadow-inner order-first min-h-[300px] lg:min-h-[400px]">
                              <WorldMap 
                                guessedIds={new Set(leaderboard[selectedRecordIndex].guessedIds || [])}
-                               highlightedId={null}
+                               highlightedId={recordTerritorySearch ? (
+                                 COUNTRIES.find(c => 
+                                   c.name.toLowerCase().includes(recordTerritorySearch.toLowerCase()) || 
+                                   c.aliases.some(a => a.toLowerCase().includes(recordTerritorySearch.toLowerCase()))
+                                 )?.id || null
+                               ) : null}
                                isFinished={true}
                                focusedContinent={null}
                                onCountryClick={(id) => {
@@ -1236,6 +1262,51 @@ export default function App() {
                              <div className="absolute top-4 right-4 bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-4 rounded-xl shadow-xl">
                                <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest mb-3">Territorial Analysis</div>
                                <div className="space-y-4">
+                                  <div className="relative">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500" />
+                                    <input 
+                                      type="text"
+                                      placeholder="Identify Territory..."
+                                      value={recordTerritorySearch}
+                                      onChange={(e) => setRecordTerritorySearch(e.target.value)}
+                                      className="w-full bg-black/50 border border-neutral-800 rounded-lg py-1.5 pl-8 pr-3 text-[10px] font-mono text-white placeholder:text-neutral-700 focus:border-emerald-500/50 outline-none transition-all uppercase"
+                                    />
+                                    {recordTerritorySearch && (
+                                      <div className="absolute top-full left-0 w-full mt-1 bg-black border border-neutral-800 rounded-lg p-2 z-20 shadow-2xl">
+                                        {(() => {
+                                          const term = recordTerritorySearch.toLowerCase();
+                                          const match = COUNTRIES.find(c => 
+                                            c.name.toLowerCase().includes(term) || 
+                                            c.aliases.some(a => a.toLowerCase().includes(term))
+                                          );
+                                          
+                                          if (!match) return <div className="text-[8px] text-neutral-600 font-mono uppercase">Unrecognized Sector</div>;
+                                          
+                                          const isSecured = leaderboard[selectedRecordIndex].guessedIds?.includes(match.id);
+                                          
+                                          return (
+                                            <div className="flex flex-col gap-1.5">
+                                              <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[9px] font-black text-white truncate uppercase">{match.name}</span>
+                                                <span className={isSecured ? "text-emerald-500 text-[8px] font-mono font-bold" : "text-red-500 text-[8px] font-mono font-bold"}>
+                                                  {isSecured ? "SECURED" : "MISSING"}
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <img 
+                                                  src={`https://flagcdn.com/w20/${match.code.toLowerCase()}.png`} 
+                                                  className="w-4 h-2.5 rounded-sm object-cover border border-white/10"
+                                                  alt="" 
+                                                />
+                                                <span className="text-[8px] text-neutral-500 font-mono">Area: {(match.area / 1000).toLocaleString()}K KM²</span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+
                                   <div className="space-y-2">
                                      <div className="flex items-center gap-3">
                                        <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
@@ -1501,9 +1572,66 @@ export default function App() {
                                 </button>
                               </div>
                               <div className="flex-1 relative">
+                                <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 w-48">
+                                  <div className="relative group">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500 group-hover:text-emerald-500 transition-colors" />
+                                    <input 
+                                      type="text"
+                                      placeholder="Track Sector..."
+                                      value={expansionSearch}
+                                      onChange={(e) => setExpansionSearch(e.target.value)}
+                                      className="w-full bg-[#121212]/90 backdrop-blur-md border border-neutral-800 rounded-lg py-1.5 pl-8 pr-3 text-[10px] font-mono text-white placeholder:text-neutral-700 focus:border-emerald-500/50 outline-none transition-all uppercase shadow-2xl"
+                                    />
+                                    {expansionSearch && (
+                                      <div className="absolute top-full left-0 w-full mt-1 bg-black border border-neutral-800 rounded-lg p-2 z-20 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+                                        {(() => {
+                                          const term = expansionSearch.toLowerCase();
+                                          const match = COUNTRIES.find(c => 
+                                            c.name.toLowerCase().includes(term) || 
+                                            c.aliases.some(a => a.toLowerCase().includes(term))
+                                          );
+                                          
+                                          if (!match) return <div className="text-[8px] text-neutral-600 font-mono uppercase">Unknown sector</div>;
+                                          
+                                          const isSecured = guessedIds.has(match.id);
+                                          
+                                          return (
+                                            <div 
+                                              className="flex flex-col gap-1.5 cursor-pointer"
+                                              onClick={() => {
+                                                setSelectedExpandedCountryId(match.id);
+                                                setExpansionSearch('');
+                                              }}
+                                            >
+                                              <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[9px] font-black text-white truncate uppercase">{match.name}</span>
+                                                <span className={isSecured ? "text-emerald-500 text-[8px] font-mono font-bold" : "text-red-500 text-[8px] font-mono font-bold"}>
+                                                  {isSecured ? "SECURED" : "MISSING"}
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <img 
+                                                  src={`https://flagcdn.com/w20/${match.code.toLowerCase()}.png`} 
+                                                  className="w-3 h-2 rounded-xs object-cover border border-white/10"
+                                                  alt="" 
+                                                />
+                                                <span className="text-[8px] text-neutral-500 font-mono">CODE: {match.code}</span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                                 <WorldMap 
                                   guessedIds={guessedIds} 
-                                  highlightedId={selectedExpandedCountryId} 
+                                  highlightedId={expansionSearch ? (
+                                    COUNTRIES.find(c => 
+                                      c.name.toLowerCase().includes(expansionSearch.toLowerCase()) || 
+                                      c.aliases.some(a => a.toLowerCase().includes(expansionSearch.toLowerCase()))
+                                    )?.id || selectedExpandedCountryId
+                                  ) : selectedExpandedCountryId} 
                                   onCountryClick={setSelectedExpandedCountryId}
                                   isFinished={true} 
                                   focusedContinent={focusedContinent === "GLOBAL" ? null : focusedContinent}
@@ -1774,6 +1902,18 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-500">[COMMAND] / [META]</span>
                         <span className="text-emerald-500/80">Toggle Satellite</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">[OPTION] / [ALT]</span>
+                        <span className="text-emerald-500/80">Pause / Resume</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-white/5 pt-1.5 mt-1.5">
+                        <span className="text-neutral-500">[ARROWS]</span>
+                        <span className="text-emerald-500/80">Pan Map</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">[+] / [-]</span>
+                        <span className="text-emerald-500/80">Zoom Zoom</span>
                       </div>
                     </div>
                   </div>
