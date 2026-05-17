@@ -5,23 +5,14 @@
 GEO-CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data and real-time cloud synchronization to track global dominance.
 
 ---
-## 📸 Mission Gallery
 
-*   **[Main Menu/Landing]** -
-*   <img width="1710" height="873" alt="Screenshot 2026-05-16 at 11 41 08" src="https://github.com/user-attachments/assets/a9712c9d-572a-46f9-a49d-b28a6a7d331f" />
+## 📸 Mission Gallery (Pointers for Screenshots)
 
-*   **[Global Identification Map]** -
-*   <img width="1708" height="872" alt="Screenshot 2026-05-16 at 11 42 27" src="https://github.com/user-attachments/assets/d23f04aa-71ff-4e21-8df0-21700c5c1355" />
-
+*   **[Main Menu/Landing]** - *Insert screenshot of the cyber-tactical main interface here
+*   **[Global Identification Map]** - *Insert screenshot of the D3.js map with active highlights here
 *   **[Tactical Flag Feedback]** - *Insert screenshot showing the 2-second flag reveal on guess here
-*   <img width="1710" height="878" alt="Screenshot 2026-05-16 at 11 42 44" src="https://github.com/user-attachments/assets/895f62a4-8c84-4f35-b0a1-3184061974f3" />
-
 *   **[Leaderboard/Intel Archive]** - *Insert screenshot of the competitive mission logs here
-*   <img width="1710" height="876" alt="Screenshot 2026-05-16 at 11 43 00" src="https://github.com/user-attachments/assets/56718e9f-7f71-417e-9c69-01e58620973c" />
-
-*   **[Debriefing/Expansion Survey]** - *Insert screenshot of the final results and continent drill-down here*
-*  <img width="1710" height="916" alt="image" src="https://github.com/user-attachments/assets/3869ce86-9635-4f66-aed9-821ee5aaa108" />
-
+*   **[Debriefing/Expansion Survey]** - *Insert screenshot of the final results and continent drill-down here
 
 ---
 
@@ -55,6 +46,17 @@ GEO-CORE is a high-precision, interactive world geography simulation designed fo
 - **Expansion Metrics**: Real-time calculation of continental landmass and GDP coverage.
 
 ---
+
+## 📡 Operational Usage & Cost Monitoring
+
+### Is this Free?
+Yes. GEO-CORE operates on the **Firebase Spark Plan**, which provides a generous free tier for developers and small missions:
+*   **Firebase Authentication**: 50,000 monthly active users for Google Identity (Free).
+*   **Cloud Firestore**: 
+    - 50,000 Reads / day (Free)
+    - 20,000 Writes / day (Free)
+    - 20,000 Deletes / day (Free)
+*   **Hosting**: 10GB total storage (Free).
 
 ### How to Check Usage?
 Officers can monitor real-time resource consumption and quota status by logging into the:

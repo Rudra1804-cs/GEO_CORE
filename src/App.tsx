@@ -92,6 +92,8 @@ const handleFirestoreError = (error: unknown, operationType: OperationType, path
   console.error('Firestore Error: ', JSON.stringify(errInfo));
 };
 
+const LOCAL_RECORDS_KEY = 'global_surveillance_guest_records';
+
 export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [guessedIds, setGuessedIds] = useState<Set<string>>(new Set());
@@ -103,6 +105,7 @@ export default function App() {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showRecordsView, setShowRecordsView] = useState(false);
   const [selectedRecordIndex, setSelectedRecordIndex] = useState<number | null>(null);
@@ -170,7 +173,17 @@ export default function App() {
 
   useEffect(() => {
     if (!user) {
-      setLeaderboard([]);
+      // Load local records for guests
+      const stored = localStorage.getItem(LOCAL_RECORDS_KEY);
+      if (stored) {
+        try {
+          setLeaderboard(JSON.parse(stored));
+        } catch (e) {
+          setLeaderboard([]);
+        }
+      } else {
+        setLeaderboard([]);
+      }
       return;
     }
 
@@ -212,6 +225,7 @@ export default function App() {
   const handleLogin = async () => {
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
       setIsGuest(false);
     } catch (error) {
@@ -349,10 +363,17 @@ export default function App() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Focus input on Enter if not in a modal/paused state
-      if (e.key === 'Enter' && !isPaused && !isFinished && !showNamePrompt && !showResults && !showRecordsView) {
-        // We only want to focus if we're not typing in some OTHER input (like the admin filter)
-        if (document.activeElement?.tagName !== 'INPUT' || document.activeElement === inputRef.current) {
+      // Toggle Satellite View with Meta key (Command)
+      if (e.key === 'Meta') {
+        e.preventDefault();
+        setIsSatelliteView(prev => !prev);
+      }
+
+      // Focus input on Enter or Space if not in a modal/paused state
+      if ((e.key === 'Enter' || e.key === ' ') && !isPaused && !isFinished && !showNamePrompt && !showResults && !showRecordsView) {
+        // Only focus and prevent default if not already typing in an input
+        if (document.activeElement?.tagName !== 'INPUT') {
+          e.preventDefault();
           inputRef.current?.focus();
         }
       }
@@ -360,7 +381,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isPaused, isFinished, showNamePrompt, showResults, showRecordsView]);
+  }, [isPaused, isFinished, showNamePrompt, showResults, showRecordsView, setIsSatelliteView]);
 
   // Scoring logic
   const getCountryPoints = (country: CountryData) => {
@@ -508,9 +529,19 @@ export default function App() {
         setTimeout(() => setFeedback(null), 3000);
       }
     } else {
-      // Fallback for non-logged-in users (maybe show they should login but save anyway)
-      // Actually our rules require login now.
-      setFeedback({ text: 'Sign in to record mission results globally.', type: 'info' });
+      // Local storage for guests
+      const localEntry = { ...entryData, id: `local-${Date.now()}` };
+      const stored = localStorage.getItem(LOCAL_RECORDS_KEY);
+      let localRecords = [];
+      if (stored) {
+        try {
+          localRecords = JSON.parse(stored);
+        } catch (e) {}
+      }
+      const updatedRecords = [localEntry, ...localRecords].slice(0, 50);
+      localStorage.setItem(LOCAL_RECORDS_KEY, JSON.stringify(updatedRecords));
+      setLeaderboard(updatedRecords);
+      setFeedback({ text: 'Mission record secured locally.', type: 'success' });
       setTimeout(() => setFeedback(null), 3000);
     }
 
@@ -542,6 +573,14 @@ export default function App() {
     setLeaderboard(newLeaderboard);
     setConfirmDeleteIndex(null);
     
+    if (entry.id?.startsWith('local-') || !user) {
+      // Delete from localStorage
+      localStorage.setItem(LOCAL_RECORDS_KEY, JSON.stringify(newLeaderboard));
+      setFeedback({ text: 'Local record erased.', type: 'success' });
+      setTimeout(() => setFeedback(null), 3000);
+      return;
+    }
+
     try {
       await deleteDoc(doc(db, 'leaderboard', entry.id));
       setFeedback({ text: 'Data record scrubbed from centralized intelligence.', type: 'success' });
@@ -771,7 +810,7 @@ export default function App() {
             ) : (
               <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
                 <button 
-                  onClick={handleLogin}
+                  onClick={() => setShowLoginModal(true)}
                   className="px-3 py-1.5 rounded text-[10px] font-black uppercase text-neutral-500 hover:text-white transition-all flex items-center gap-2"
                 >
                   <LogIn className="w-3 h-3" />
@@ -1075,7 +1114,7 @@ export default function App() {
                           <div className="flex items-center gap-2 mt-1">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             <span className="text-[8px] text-emerald-500/80 font-mono uppercase tracking-widest">
-                              {isAdmin ? 'Global Intelligence Access Active' : 'Personal Records Secure'}
+                              {isAdmin ? 'Global Intelligence Access Active' : user ? 'Personal Records Sync Active' : 'Local Temporary Intelligence Only'}
                             </span>
                           </div>
                         </div>
@@ -1131,7 +1170,7 @@ export default function App() {
                               selectedRecordIndex === i ? "bg-emerald-500 text-black" : "bg-neutral-800 text-neutral-500 group-hover:bg-neutral-700"
                             )}>
                               <span className="group-hover/num:opacity-0 transition-opacity">{i + 1}</span>
-                              {entry.userId === user?.uid && (
+                              {(entry.userId === user?.uid || (!user && entry.id?.startsWith('local-'))) && (
                                 <button
                                   type="button"
                                   onClick={(e) => deleteRecord(e, i)}
@@ -1347,20 +1386,26 @@ export default function App() {
                   ) : (
                     <div className="flex flex-col gap-3">
                       <button 
-                        onClick={handleLogin}
+                        onClick={() => setShowLoginModal(true)}
                         className="w-full py-4 bg-emerald-500 text-black rounded-xl font-black uppercase tracking-widest transition-all hover:bg-emerald-400 active:scale-95 shadow-lg flex items-center justify-center gap-2"
                       >
                         <LogIn className="w-5 h-5" />
                         Sign In to Record
                       </button>
                       <button 
+                        onClick={saveScoreAndShowResults}
+                        className="w-full py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all hover:bg-emerald-500 hover:text-black active:scale-95"
+                      >
+                        Store Guest Record locally
+                      </button>
+                      <button 
                         onClick={() => {
                           setShowNamePrompt(false);
                           setShowExpandedDetail(true);
                         }}
-                        className="w-full py-3 bg-neutral-900 border border-neutral-800 text-neutral-400 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all hover:bg-neutral-800 hover:text-white"
+                        className="w-full py-2 text-neutral-500 hover:text-neutral-300 text-[8px] font-mono uppercase tracking-widest transition-colors"
                       >
-                        Mission Analysis (No Sync)
+                        Exit without recording
                       </button>
                     </div>
                   )}
@@ -1717,6 +1762,20 @@ export default function App() {
                   <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-1">
                     <p className="text-amber-500 font-bold tracking-[0.2em]">Modes</p>
                     <p><span className="text-neutral-200">Zen:</span> Infinite time. <span className="text-neutral-200">Challenge:</span> High-speed timed retrieval.</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#1a1a1a] border border-neutral-800 space-y-2">
+                    <p className="text-white font-bold tracking-[0.2em]">Strategic Shortcuts</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">[ENTER] or [SPACE]</span>
+                        <span className="text-emerald-500/80">Focus Input</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">[COMMAND] / [META]</span>
+                        <span className="text-emerald-500/80">Toggle Satellite</span>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-emerald-400/80">
@@ -2112,6 +2171,85 @@ export default function App() {
                  </button>
                </div>
              </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showLoginModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              className="bg-[#121212] border border-white/10 p-8 rounded-[32px] shadow-2xl max-w-sm w-full text-center space-y-8 relative overflow-hidden"
+            >
+              {/* Accents */}
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/5 rounded-full blur-[60px]" />
+              
+              <div className="space-y-4">
+                <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto text-emerald-500 border border-emerald-500/20 rotate-3">
+                  <LogIn className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">IDENTITY SELECTOR</h3>
+                  <p className="text-neutral-500 text-[10px] font-mono uppercase tracking-[0.2em] font-bold">Choose your mission profile</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button 
+                  onClick={async () => {
+                    await handleLogin();
+                    setShowLoginModal(false);
+                  }}
+                  className="w-full p-5 bg-white text-black rounded-2xl flex flex-col items-center gap-1 transition-all hover:bg-emerald-500 active:scale-[0.98] shadow-[0_0_20px_rgba(255,255,255,0.1)] group border-2 border-transparent hover:border-black/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <svg className="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    <span className="font-black uppercase tracking-tight text-sm">Cloud Agent (Google)</span>
+                  </div>
+                  <span className="text-[9px] opacity-60 font-mono font-bold tracking-widest">SECURE DATA SYNCHRONIZATION</span>
+                </button>
+
+                <div className="flex items-center gap-3 py-1">
+                  <div className="h-px flex-1 bg-white/5" />
+                  <span className="text-[8px] font-mono text-neutral-600 uppercase tracking-widest font-black">OR</span>
+                  <div className="h-px flex-1 bg-white/5" />
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setIsGuest(true);
+                    setShowLoginModal(false);
+                  }}
+                  className="w-full p-4 bg-neutral-900 text-neutral-400 rounded-2xl border border-neutral-800 flex flex-col items-center gap-1 transition-all hover:bg-neutral-800 hover:text-white active:scale-[0.98] group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Globe className="w-5 h-5 transition-transform group-hover:rotate-12" />
+                    <span className="font-black uppercase tracking-tight text-sm">Guest Operative</span>
+                  </div>
+                  <span className="text-[9px] opacity-40 font-mono font-bold tracking-widest">LOCAL TEMPORARY STORAGE</span>
+                </button>
+                
+                <button 
+                  onClick={() => setShowLoginModal(false)}
+                  className="w-full py-2 text-neutral-600 hover:text-neutral-400 transition-colors font-black uppercase tracking-widest text-[9px] mt-2"
+                >
+                  Cancel Authorization
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
