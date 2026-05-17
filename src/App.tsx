@@ -25,7 +25,10 @@ import {
   VolumeX,
   LogIn,
   LogOut,
-  HelpCircle
+  HelpCircle,
+  Satellite,
+  Pause,
+  Play
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -123,7 +126,10 @@ export default function App() {
   const [adminFilter, setAdminFilter] = useState('');
   const [selectedContinentFilter, setSelectedContinentFilter] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [isSatelliteView, setIsSatelliteView] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
+  const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const typeSoundPool = useRef<HTMLAudioElement[]>([]);
   const returnSoundRef = useRef<HTMLAudioElement | null>(null);
@@ -319,10 +325,10 @@ export default function App() {
 
   // Start timer
   useEffect(() => {
-    if (hasStarted && startTime && !isFinished) {
+    if (hasStarted && startTime && !isFinished && !isPaused) {
       timerRef.current = setInterval(() => {
         if (gameMode === 'zen') {
-          setTimeElapsed(Math.floor((Date.now() - startTime) / 1000));
+          setTimeElapsed(prev => prev + 1);
         } else {
           setTimeLeft(prev => {
             if (prev <= 1) {
@@ -339,7 +345,22 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [startTime, isFinished, gameMode]);
+  }, [hasStarted, startTime, isFinished, gameMode, isPaused]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Focus input on Enter if not in a modal/paused state
+      if (e.key === 'Enter' && !isPaused && !isFinished && !showNamePrompt && !showResults && !showRecordsView) {
+        // We only want to focus if we're not typing in some OTHER input (like the admin filter)
+        if (document.activeElement?.tagName !== 'INPUT' || document.activeElement === inputRef.current) {
+          inputRef.current?.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isPaused, isFinished, showNamePrompt, showResults, showRecordsView]);
 
   // Scoring logic
   const getCountryPoints = (country: CountryData) => {
@@ -563,6 +584,7 @@ export default function App() {
     setInputValue('');
     setFeedback(null);
     setPlayerName('');
+    setIsPaused(false);
   };
 
   useEffect(() => {
@@ -578,7 +600,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-[100dvh] bg-[#0a0a0a] text-neutral-200 font-sans selection:bg-emerald-500/30 overflow-hidden flex flex-col">
+    <div className="h-[100dvh] bg-[#0a0a0a] text-neutral-200 font-sans selection:bg-emerald-500/30 overflow-hidden flex flex-col relative">
       {/* Header / Mission Control Bar */}
       <header className="h-auto lg:h-16 border-b border-neutral-800 bg-[#121212]/80 backdrop-blur-md flex flex-col lg:flex-row items-center px-4 lg:px-6 py-1 lg:py-0 justify-between z-10 gap-1 lg:gap-0 shrink-0">
         <div className="flex items-center justify-between w-full lg:w-auto gap-3 relative shrink-0">
@@ -586,8 +608,35 @@ export default function App() {
             <div className="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-500">
               <Globe className="w-5 h-5" />
             </div>
-            <div>
-              <h1 className="font-bold text-sm tracking-tight text-white uppercase">GEO_CORE <span className="text-emerald-500">v2.0</span></h1>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <h1 className="font-bold text-sm tracking-tight text-white uppercase">GEO_CORE <span className="text-emerald-500">v2.0</span></h1>
+                <button 
+                  onClick={() => setIsSatelliteView(!isSatelliteView)}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all",
+                    isSatelliteView 
+                      ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
+                      : "bg-neutral-800 text-neutral-500 hover:text-white"
+                  )}
+                  title="Satellite View"
+                >
+                  <Satellite className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                  onClick={() => setIsPaused(!isPaused)}
+                  disabled={!hasStarted || isFinished}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all",
+                    isPaused 
+                      ? "bg-yellow-500 text-black shadow-[0_0_10px_rgba(234,179,8,0.5)]" 
+                      : "bg-neutral-800 text-neutral-500 hover:text-white disabled:opacity-30"
+                  )}
+                  title={isPaused ? "Resume Mission" : "Pause Mission"}
+                >
+                  {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                </button>
+              </div>
               {user && (
                 <p className="text-[8px] text-neutral-500 font-mono uppercase tracking-widest truncate max-w-[120px] hidden sm:block">
                   Agent: {user.email?.split('@')[0]}
@@ -785,45 +834,51 @@ export default function App() {
 
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
         {/* Sidebar Controls */}
-        <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 shrink-0 h-[35dvh] lg:h-auto lg:max-h-full z-20">
-          <div className="p-2 lg:p-6 space-y-2 lg:space-y-6 shrink-0">
-            <AnimatePresence mode="wait">
-              <motion.div key="search" className="space-y-0.5 lg:space-y-2">
-                <label className="text-[8px] lg:text-[10px] text-neutral-500 font-mono uppercase tracking-widest hidden lg:block">Identify Global Territory</label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-500" />
-                    <input 
-                      type="text"
-                      value={inputValue}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      disabled={isFinished}
-                      placeholder="Type country name..."
-                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-1.5 lg:py-3 pl-9 lg:pl-10 pr-4 text-xs lg:text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-700"
-                    />
+        <aside className={cn(
+          "w-full border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 shrink-0 h-[35dvh] lg:h-auto lg:max-h-full z-20 transition-all duration-500",
+          isSatelliteView ? "lg:w-64" : "lg:w-80"
+        )}>
+          {!isSatelliteView && (
+            <div className="p-2 lg:p-6 space-y-2 lg:space-y-6 shrink-0">
+              <AnimatePresence mode="wait">
+                <motion.div key="search" className="space-y-0.5 lg:space-y-2">
+                  <label className="text-[8px] lg:text-[10px] text-neutral-500 font-mono uppercase tracking-widest hidden lg:block">Identify Global Territory</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-500" />
+                      <input 
+                        ref={inputRef}
+                        type="text"
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        disabled={isFinished || isPaused}
+                        placeholder={isPaused ? "MISSION PAUSED" : "Type country name..."}
+                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-1.5 lg:py-3 pl-9 lg:pl-10 pr-4 text-xs lg:text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-700"
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="relative h-4">
-                  <AnimatePresence>
-                    {feedback && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: -5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 5 }}
-                        className={cn(
-                          "absolute inset-0 text-center text-[10px] font-bold uppercase tracking-widest",
-                          feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
-                        )}
-                      >
-                        {feedback.text}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
+                  <div className="relative h-4">
+                    <AnimatePresence>
+                      {feedback && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 5 }}
+                          className={cn(
+                            "absolute inset-0 text-center text-[10px] font-bold uppercase tracking-widest",
+                            feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
+                          )}
+                        >
+                          {feedback.text}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          )}
 
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="hidden lg:block px-6 pb-6 space-y-4">
@@ -859,20 +914,22 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
-                  <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Guessed</span>
-                  <span className="text-xl font-bold">
-                    {guessedIds.size} <span className="text-[9px] font-normal text-neutral-600">/ {COUNTRIES.length}</span>
-                  </span>
+              {!isSatelliteView && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
+                    <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Guessed</span>
+                    <span className="text-xl font-bold">
+                      {guessedIds.size} <span className="text-[9px] font-normal text-neutral-600">/ {COUNTRIES.length}</span>
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
+                    <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Multiplier</span>
+                    <span className="text-xl font-bold text-emerald-500">
+                      x{currentMultiplier.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
-                <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
-                  <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Multiplier</span>
-                  <span className="text-xl font-bold text-emerald-500">
-                    x{currentMultiplier.toFixed(2)}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 custom-scrollbar space-y-4">
@@ -928,6 +985,68 @@ export default function App() {
 
         {/* Map Area */}
         <section className="flex-1 p-0 lg:p-6 flex flex-col gap-0 lg:gap-6 relative overflow-hidden">
+          {isSatelliteView && !isFinished && (
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg px-6">
+              <motion.div 
+                initial={{ y: 50, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="bg-[#121212]/90 backdrop-blur-xl border border-emerald-500/30 rounded-2xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4"
+              >
+                <div className="flex gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                    <input 
+                      ref={inputRef}
+                      type="text"
+                      value={inputValue}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      disabled={isPaused}
+                      placeholder={isPaused ? "MISSION PAUSED" : "Type country name..."}
+                      className="w-full bg-black/50 border border-neutral-800 rounded-lg py-2 pl-9 pr-4 text-xs focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all font-semibold placeholder:text-neutral-700"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="px-3 py-1.5 bg-black/50 border border-neutral-800 rounded-lg flex flex-col justify-center min-w-[70px]">
+                      <span className="text-[7px] text-neutral-500 uppercase font-mono tracking-widest leading-none mb-1">Guessed</span>
+                      <span className="text-[11px] font-bold text-white leading-none">{guessedIds.size} / {COUNTRIES.length}</span>
+                    </div>
+                    <div className="px-3 py-1.5 bg-black/50 border border-neutral-800 rounded-lg flex flex-col justify-center min-w-[70px]">
+                      <span className="text-[7px] text-emerald-500/70 uppercase font-mono tracking-widest leading-none mb-1">Multiplier</span>
+                      <span className="text-[11px] font-bold text-emerald-500 leading-none">x{currentMultiplier.toFixed(2)}</span>
+                    </div>
+                    <button 
+                      onClick={() => setIsPaused(!isPaused)}
+                      className={cn(
+                        "p-1 rounded-lg flex items-center justify-center transition-all",
+                        isPaused 
+                          ? "bg-yellow-500 text-black" 
+                          : "bg-black/50 border border-neutral-800 text-neutral-500 hover:text-white"
+                      )}
+                      title={isPaused ? "Resume Operation" : "Pause Operation"}
+                    >
+                      {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+                <AnimatePresence>
+                  {feedback && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className={cn(
+                        "text-center text-[10px] font-black uppercase tracking-widest",
+                        feedback.type === 'success' ? 'text-emerald-400' : 'text-red-400'
+                      )}
+                    >
+                      {feedback.text}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+          )}
           {/* Mobile Guessed Button */}
           <div className="lg:hidden absolute bottom-4 left-4 z-40">
              <button 
@@ -1237,7 +1356,7 @@ export default function App() {
                       <button 
                         onClick={() => {
                           setShowNamePrompt(false);
-                          setShowResults(true);
+                          setShowExpandedDetail(true);
                         }}
                         className="w-full py-3 bg-neutral-900 border border-neutral-800 text-neutral-400 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all hover:bg-neutral-800 hover:text-white"
                       >
@@ -1250,7 +1369,7 @@ export default function App() {
                     <button 
                       onClick={() => {
                         setShowNamePrompt(false);
-                        setShowResults(true);
+                        setShowExpandedDetail(true);
                       }}
                       className="w-full py-2 text-neutral-500 hover:text-neutral-300 text-[10px] font-mono uppercase tracking-widest transition-colors"
                     >
@@ -1932,6 +2051,67 @@ export default function App() {
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isPaused && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] backdrop-blur-md bg-black/60 flex flex-col items-center justify-center p-6 text-center"
+          >
+             <motion.div
+               initial={{ scale: 0.9, opacity: 0, y: 20 }}
+               animate={{ scale: 1, opacity: 1, y: 0 }}
+               className="space-y-6"
+             >
+               <div className="space-y-2">
+                 <h2 className="text-6xl lg:text-8xl font-black text-white uppercase tracking-tighter italic leading-none">PAUSED</h2>
+                 <div className="flex items-center justify-center gap-4">
+                   <div className="h-px w-12 bg-emerald-500/50" />
+                   <p className="text-emerald-500 font-mono text-[10px] lg:text-xs uppercase tracking-[0.4em] font-bold">Mission in Standby</p>
+                   <div className="h-px w-12 bg-emerald-500/50" />
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-2 gap-8 py-8 border-y border-white/10 w-full max-w-lg">
+                  <div>
+                    <p className="text-neutral-500 font-mono text-[9px] uppercase tracking-widest mb-2">Last Identified</p>
+                    {lastGuessedId ? (() => {
+                      const country = COUNTRIES.find(c => c.id === lastGuessedId);
+                      return (
+                        <div className="flex items-center gap-3 justify-center">
+                          <img 
+                            src={`https://flagcdn.com/w80/${country?.code.toLowerCase()}.png`} 
+                            className="h-6 rounded-sm shadow-lg border border-white/10"
+                            alt="" 
+                          />
+                          <p className="text-xl font-bold text-white uppercase tracking-tight">{country?.name}</p>
+                        </div>
+                      );
+                    })() : (
+                      <p className="text-lg font-bold text-neutral-600 uppercase">None Detected</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-neutral-500 font-mono text-[9px] uppercase tracking-widest mb-2">Current Score</p>
+                    <p className="text-3xl font-black text-emerald-500 font-mono leading-none flex items-center justify-center h-6">{score.toLocaleString()}</p>
+                  </div>
+               </div>
+
+               <div className="flex flex-col items-center justify-center">
+                 <button 
+                   onClick={() => setIsPaused(false)}
+                   className="group relative px-10 py-4 bg-white text-black font-black uppercase text-sm tracking-widest rounded-xl hover:bg-emerald-500 transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                 >
+                   Resume Operation
+                   <div className="absolute -inset-1 rounded-xl bg-white/20 blur-lg group-hover:bg-emerald-500/20 transition-all" />
+                 </button>
+               </div>
+             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
