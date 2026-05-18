@@ -85,10 +85,10 @@ After every mission, a deep-dive analysis is provided:
 
 ---
 ## System Architecture view
-Client (React + D3)
-Map Engine (TopoJSON layer rendering)
-Game Engine (state + scoring)
-Backend (Firebase auth + storage)
+**Client**: React 18+ (Vite)
+**Map Engine**: (TopoJSON layer rendering)
+**Game Engine**: (state + scoring)
+**Backend**: (Firebase auth + storage)
 ---
 ## 🛠 Strategic Tech Stack
 
