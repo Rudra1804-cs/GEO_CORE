@@ -84,7 +84,12 @@ After every mission, a deep-dive analysis is provided:
 <img width="976" height="812" alt="Screenshot 2026-05-18 at 07 42 12" src="https://github.com/user-attachments/assets/a0bb469d-f766-4428-b7a7-e83963ead737" />
 
 ---
-
+## System Architecture view
+Client (React + D3)
+Map Engine (TopoJSON layer rendering)
+Game Engine (state + scoring)
+Backend (Firebase auth + storage)
+---
 ## 🛠 Strategic Tech Stack
 
 - **Framework**: React 18+ (Vite)
