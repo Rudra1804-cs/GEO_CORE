@@ -1,33 +1,11 @@
-# GEO_CORE: Global Surveillance & Identification Protocol (V4.5)
+# GEO-CORE: Global Surveillance & Identification Protocol (V4.5)
 
 **Live Mission Link:** [https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app](https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app)
 
-GEO_CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data and real-time cloud synchronization to track global dominance.
+GEO-CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data and real-time cloud synchronization to track global dominance.
 
 ---
-## 📸 Mission Gallery
 
-*   **[Main Menu/Landing]** -
-*   <img width="1710" height="873" alt="Screenshot 2026-05-16 at 11 41 08" src="https://github.com/user-attachments/assets/a9712c9d-572a-46f9-a49d-b28a6a7d331f" />
-
-*   **[Global Identification Map]** -
-*   <img width="1708" height="872" alt="Screenshot 2026-05-16 at 11 42 27" src="https://github.com/user-attachments/assets/d23f04aa-71ff-4e21-8df0-21700c5c1355" />
-
-*   **[Tactical Flag Feedback]** - 
-*   <img width="1710" height="878" alt="Screenshot 2026-05-16 at 11 42 44" src="https://github.com/user-attachments/assets/895f62a4-8c84-4f35-b0a1-3184061974f3" />
-*   <img width="1704" height="912" alt="Screenshot 2026-05-18 at 07 41 54" src="https://github.com/user-attachments/assets/2fa260f9-57e5-4263-9bb7-6993a74319c8" />
-
-*   **[Pause the game]** -
-*   <img width="1710" height="902" alt="Screenshot 2026-05-18 at 07 42 28" src="https://github.com/user-attachments/assets/68d29fa9-a1f8-4e47-8344-21b61585d420" />
-
-*   **[Leaderboard/Intel Archive]** - 
-*   <img width="1710" height="907" alt="Screenshot 2026-05-18 at 07 42 53" src="https://github.com/user-attachments/assets/e8617522-538c-403e-a306-6cf2fd6de038" />
-
-
-*   **[Debriefing/Expansion Survey]** - 
-*  <img width="1709" height="903" alt="Screenshot 2026-05-18 at 07 43 27" src="https://github.com/user-attachments/assets/bf65a5fa-c7e6-4c3d-a4c3-ebc347527164" />
-
----
 ## 🚀 The Protocol: Game Logic & Mechanics
 
 ### 1. The "Tetra-Pillar" Scoring Algorithm
@@ -49,12 +27,11 @@ Every territory identified contributes to a complex multidimensional score. Your
 ## 📡 Tactical Features
 
 ### 1. Visual Intelligence Suite
+- **Globe Protocol (3D)**: Interactive 3D globe mode with smooth rotation and zooming. Toggle with the Globe icon or `[CMD/CTRL+G]`.
 - **D3.js Geospatial Engine**: High-performance TopoJSON rendering with custom "Orthographic" and "Equirectangular" projection transitions.
 - **Satellite Overlay**: Real-time toggleable satellite imagery for terrain verification and landmark spotting.
 - **The "Command Center" Input**: Predictive data entry supporting official names, ISO-3166 alpha-3 codes, and tactical aliases.
 - **Authentication Feedback**: High-resolution 160px flag verification pulse (2-second duration) upon successful identification.
----
-<img width="877" height="791" alt="Screenshot 2026-05-18 at 07 40 31" src="https://github.com/user-attachments/assets/a4d8f3aa-bd9f-471f-b9c6-73620e72a80d" />
 
 ### 2. Intelligence Archive (Mission Logs)
 - **Hybrid Storage Protocol**: Your missions are secured using both `Cloud Firestore` (for logged-in operatives) and `LocalStorage` (for anonymous field agents).
@@ -76,20 +53,15 @@ After every mission, a deep-dive analysis is provided:
 | Key | Action |
 | :--- | :--- |
 | `[ENTER] / [SPACE]` | **Focus Identification Terminal** |
+| `[CMD / CTRL] + [G]` | **Toggle Globe Mode (3D)** |
 | `[CMD / CTRL] + [X]` | **Toggle Satellite Intelligence Overlay** |
 | `[ALT / OPTION]` | **Strategic Pause / Resume (Challenge Mode)** |
 | `[ARROW KEYS]` | **Fluid Map Panning** |
 | `[+] / [-]` | **Micro/Macro Zooming** |
 | `[ESCAPE]` | **Clear Input / Close Modals** |
-<img width="976" height="812" alt="Screenshot 2026-05-18 at 07 42 12" src="https://github.com/user-attachments/assets/a0bb469d-f766-4428-b7a7-e83963ead737" />
 
 ---
-## System Architecture view
-**Client**: React 18+ (Vite)
-**Map Engine**: (TopoJSON layer rendering)
-**Game Engine**: (state + scoring)
-**Backend**: (Firebase auth + storage)
----
+
 ## 🛠 Strategic Tech Stack
 
 - **Framework**: React 18+ (Vite)
@@ -101,3 +73,15 @@ After every mission, a deep-dive analysis is provided:
 - **Styling**: Tailwind CSS (Cyan/Emerald Tactical Theme)
 
 ---
+
+## 📡 Operational Support & Quotas
+
+Controlled by the **Firebase Spark Protocol**:
+*   **Operational Reads**: 50,000 / day (Reset at 00:00 PST)
+*   **Operational Writes**: 20,000 / day
+*   **Identity Provisioning**: Unlimited via Google Identity Service
+
+> **Officer Note**: If "Quota Exceeded" alerts trigger, all active intelligence syncing will pause until the next tactical day.
+
+---
+**[GEO-CORE]** *v4.5 - Security Clearance Level 4 Required.*

@@ -32,7 +32,8 @@ import {
   Satellite,
   Pause,
   Play,
-  ListFilter
+  ListFilter,
+  Brain
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -139,6 +140,8 @@ export default function App() {
   const [selectedContinentFilter, setSelectedContinentFilter] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isSatelliteView, setIsSatelliteView] = useState(false);
+  const [isGlobeMode, setIsGlobeMode] = useState(false);
+  const [isMemoryMode, setIsMemoryMode] = useState(false);
   const [expansionSort, setExpansionSort] = useState<'alphabet' | 'wealth'>('alphabet');
   const [isPaused, setIsPaused] = useState(false);
 
@@ -377,6 +380,18 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x') {
         e.preventDefault();
         setIsSatelliteView(prev => !prev);
+      }
+
+      // Toggle Globe View with Meta/Ctrl + G
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        setIsGlobeMode(prev => !prev);
+      }
+
+      // Toggle Memory Mode with Meta/Ctrl + M
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setIsMemoryMode(prev => !prev);
       }
 
       // Toggle Pause with Alt key (Option)
@@ -651,6 +666,15 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (lastGuessedId) {
+      const timer = setTimeout(() => {
+        setLastGuessedId(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastGuessedId]);
+
   const startGame = () => {
     setHasStarted(true);
     setStartTime(Date.now());
@@ -697,9 +721,18 @@ export default function App() {
       <header className="h-auto lg:h-16 border-b border-neutral-800 bg-[#121212]/80 backdrop-blur-md flex flex-col lg:flex-row items-center px-4 lg:px-6 py-1 lg:py-0 justify-between z-10 gap-1 lg:gap-0 shrink-0">
         <div className="flex items-center justify-between w-full lg:w-auto gap-3 relative shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-emerald-500/20 flex items-center justify-center text-emerald-500">
-              <Globe className="w-5 h-5" />
-            </div>
+            <button 
+              onClick={() => setIsGlobeMode(!isGlobeMode)}
+              className={cn(
+                "w-8 h-8 rounded flex items-center justify-center transition-all",
+                isGlobeMode 
+                  ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.5)]" 
+                  : "bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30"
+              )}
+              title={isGlobeMode ? "Switch to 2D Map" : "Switch to 3D Globe"}
+            >
+              <Globe className={cn("w-5 h-5", isGlobeMode && "animate-[spin_10s_linear_infinite]")} />
+            </button>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-sm tracking-tight text-white uppercase">GEO_CORE <span className="text-emerald-500">v2.0</span></h1>
@@ -804,6 +837,19 @@ export default function App() {
                   Hard
                 </button>
               </div>
+
+              <button 
+                onClick={() => setIsMemoryMode(!isMemoryMode)}
+                className={cn(
+                  "p-1.5 lg:p-2 rounded-lg transition-all border",
+                  isMemoryMode 
+                    ? "bg-purple-500 text-white border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.4)]" 
+                    : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-neutral-300"
+                )}
+                title="Toggle Memory Mode (Stealth)"
+              >
+                <Brain className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+              </button>
 
               {gameMode === 'challenge' && (
                 <select 
@@ -1025,40 +1071,51 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 custom-scrollbar space-y-4">
-               <div>
-                 <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-2 lg:mb-4 sticky top-0 bg-[#121212] lg:bg-[#121212] py-1 lg:py-2 z-10">Secured Zones</label>
-               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
-                  {[...guessedIds].reverse().map(id => {
-                    const country = COUNTRIES.find(c => c.id === id);
-                    return (
-                      <motion.div 
-                        key={id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="flex items-center gap-3 p-2 rounded bg-neutral-900/30 border border-neutral-800/30 text-[11px] group hover:bg-neutral-800/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <img 
-                            src={`https://flagcdn.com/w20/${country?.code.toLowerCase()}.png`} 
-                            className="w-4 h-3 rounded-sm object-cover border border-white/10"
-                            alt="" 
-                          />
-                          <span className="truncate">{country?.name}</span>
-                        </div>
-                        <span className="text-[9px] text-emerald-500 font-mono font-bold">+{getCountryPoints(country!)} pts</span>
-                      </motion.div>
-                    );
-                  })}
-                  {guessedIds.size === 0 && (
-                    <div className="text-center py-6 opacity-20">
-                      <Flag className="w-6 h-6 mx-auto mb-2" />
-                      <p className="text-[10px] uppercase font-mono tracking-widest">No territory identified</p>
-                    </div>
-                  )}
+               {!isMemoryMode ? (
+                 <div>
+                   <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-2 lg:mb-4 sticky top-0 bg-[#121212] lg:bg-[#121212] py-1 lg:py-2 z-10">Secured Zones</label>
+                 <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                    {[...guessedIds].reverse().map(id => {
+                      const country = COUNTRIES.find(c => c.id === id);
+                      return (
+                        <motion.div 
+                          key={id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="flex items-center gap-3 p-2 rounded bg-neutral-900/30 border border-neutral-800/30 text-[11px] group hover:bg-neutral-800/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <img 
+                              src={`https://flagcdn.com/w20/${country?.code.toLowerCase()}.png`} 
+                              className="w-4 h-3 rounded-sm object-cover border border-white/10"
+                              alt="" 
+                            />
+                            <span className="truncate">{country?.name}</span>
+                          </div>
+                          <span className="text-[9px] text-emerald-500 font-mono font-bold">+{getCountryPoints(country!)} pts</span>
+                        </motion.div>
+                      );
+                    })}
+                    {guessedIds.size === 0 && (
+                      <div className="text-center py-6 opacity-20">
+                        <Flag className="w-6 h-6 mx-auto mb-2" />
+                        <p className="text-[10px] uppercase font-mono tracking-widest">No territory identified</p>
+                      </div>
+                    )}
+                 </div>
                </div>
-             </div>
+               ) : (
+                 <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-20 select-none">
+                    <Brain className="w-12 h-12 mb-4 text-purple-400" />
+                    <span className="text-[10px] font-mono uppercase tracking-widest leading-relaxed">
+                      Memory Mode Active<br/>
+                      Stealth Protocols Engaged<br/>
+                      Lists are Classified
+                    </span>
+                 </div>
+               )}
 
-             <AnimatePresence>
+               <AnimatePresence>
                {showKashmirNotice && (
                  <motion.div
                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
@@ -1354,6 +1411,8 @@ export default function App() {
                                  setSelectedExpandedCountryId(id);
                                  setShowExpandedDetail(true);
                                }}
+                               projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
+                               isMemoryMode={false}
                              />
                              <div className="absolute top-4 right-4 bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-4 rounded-xl shadow-xl">
                                <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest mb-3">Territorial Analysis</div>
@@ -1465,21 +1524,25 @@ export default function App() {
                   highlightedId={lastGuessedId} 
                   isFinished={isFinished} 
                   focusedContinent={focusedContinent}
+                  projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
+                  isMemoryMode={isMemoryMode}
                 />
               
                 {/* Interactive Overlays */}
-                <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-                  <div className="bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-3 rounded-lg flex items-center gap-4 shadow-xl">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-                      <span className="text-[10px] font-mono uppercase">Secured</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-sm bg-[#262626]" />
-                      <span className="text-[10px] font-mono uppercase">Unknown</span>
+                {!isMemoryMode && (
+                  <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                    <div className="bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-3 rounded-lg flex items-center gap-4 shadow-xl">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+                        <span className="text-[10px] font-mono uppercase">Secured</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-sm bg-[#262626]" />
+                        <span className="text-[10px] font-mono uppercase">Unknown</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -1731,6 +1794,8 @@ export default function App() {
                                   onCountryClick={setSelectedExpandedCountryId}
                                   isFinished={true} 
                                   focusedContinent={focusedContinent === "GLOBAL" ? null : focusedContinent}
+                                  projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
+                                  isMemoryMode={false}
                                 />
                               </div>
                           </div>
@@ -2030,6 +2095,10 @@ export default function App() {
                         <span className="text-emerald-500/80">Toggle Satellite</span>
                       </div>
                       <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">[CMD / CTRL] + [G]</span>
+                        <span className="text-emerald-500/80">Toggle Globe</span>
+                      </div>
+                      <div className="flex items-center justify-between">
                         <span className="text-neutral-500">[OPTION] / [ALT]</span>
                         <span className="text-emerald-500/80">Pause / Resume</span>
                       </div>
@@ -2115,6 +2184,8 @@ export default function App() {
                       onCountryClick={setSelectedExpandedCountryId}
                       isFinished={true}
                       focusedContinent={null}
+                      projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
+                      isMemoryMode={false}
                     />
                     
                     <AnimatePresence>
