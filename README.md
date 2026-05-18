@@ -25,7 +25,8 @@ GEO_CORE is a high-precision, interactive world geography simulation designed fo
 
 
 *   **[Debriefing/Expansion Survey]** - 
-*  <img width="1710" height="916" alt="image" src="https://github.com/user-attachments/assets/3869ce86-9635-4f66-aed9-821ee5aaa108" />
+*  <img width="1709" height="903" alt="Screenshot 2026-05-18 at 07 43 27" src="https://github.com/user-attachments/assets/bf65a5fa-c7e6-4c3d-a4c3-ebc347527164" />
+
 ---
 ## 🚀 The Protocol: Game Logic & Mechanics
 
