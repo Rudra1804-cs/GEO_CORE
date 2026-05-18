@@ -13,13 +13,18 @@ GEO_CORE is a high-precision, interactive world geography simulation designed fo
 *   **[Global Identification Map]** -
 *   <img width="1708" height="872" alt="Screenshot 2026-05-16 at 11 42 27" src="https://github.com/user-attachments/assets/d23f04aa-71ff-4e21-8df0-21700c5c1355" />
 
-*   **[Tactical Flag Feedback]** - *Insert screenshot showing the 2-second flag reveal on guess here
+*   **[Tactical Flag Feedback]** - 
 *   <img width="1710" height="878" alt="Screenshot 2026-05-16 at 11 42 44" src="https://github.com/user-attachments/assets/895f62a4-8c84-4f35-b0a1-3184061974f3" />
+*   <img width="1704" height="912" alt="Screenshot 2026-05-18 at 07 41 54" src="https://github.com/user-attachments/assets/2fa260f9-57e5-4263-9bb7-6993a74319c8" />
 
-*   **[Leaderboard/Intel Archive]** - *Insert screenshot of the competitive mission logs here
-*   <img width="1710" height="876" alt="Screenshot 2026-05-16 at 11 43 00" src="https://github.com/user-attachments/assets/56718e9f-7f71-417e-9c69-01e58620973c" />
+*   **[Pause the game]** -
+*   <img width="1710" height="902" alt="Screenshot 2026-05-18 at 07 42 28" src="https://github.com/user-attachments/assets/68d29fa9-a1f8-4e47-8344-21b61585d420" />
 
-*   **[Debriefing/Expansion Survey]** - *Insert screenshot of the final results and continent drill-down here*
+*   **[Leaderboard/Intel Archive]** - 
+*   <img width="1710" height="907" alt="Screenshot 2026-05-18 at 07 42 53" src="https://github.com/user-attachments/assets/e8617522-538c-403e-a306-6cf2fd6de038" />
+
+
+*   **[Debriefing/Expansion Survey]** - 
 *  <img width="1710" height="916" alt="image" src="https://github.com/user-attachments/assets/3869ce86-9635-4f66-aed9-821ee5aaa108" />
 ---
 ## 🚀 The Protocol: Game Logic & Mechanics
@@ -47,6 +52,8 @@ Every territory identified contributes to a complex multidimensional score. Your
 - **Satellite Overlay**: Real-time toggleable satellite imagery for terrain verification and landmark spotting.
 - **The "Command Center" Input**: Predictive data entry supporting official names, ISO-3166 alpha-3 codes, and tactical aliases.
 - **Authentication Feedback**: High-resolution 160px flag verification pulse (2-second duration) upon successful identification.
+---
+<img width="877" height="791" alt="Screenshot 2026-05-18 at 07 40 31" src="https://github.com/user-attachments/assets/a4d8f3aa-bd9f-471f-b9c6-73620e72a80d" />
 
 ### 2. Intelligence Archive (Mission Logs)
 - **Hybrid Storage Protocol**: Your missions are secured using both `Cloud Firestore` (for logged-in operatives) and `LocalStorage` (for anonymous field agents).
@@ -73,6 +80,7 @@ After every mission, a deep-dive analysis is provided:
 | `[ARROW KEYS]` | **Fluid Map Panning** |
 | `[+] / [-]` | **Micro/Macro Zooming** |
 | `[ESCAPE]` | **Clear Input / Close Modals** |
+<img width="976" height="812" alt="Screenshot 2026-05-18 at 07 42 12" src="https://github.com/user-attachments/assets/a0bb469d-f766-4428-b7a7-e83963ead737" />
 
 ---
 
