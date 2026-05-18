@@ -13,6 +13,7 @@ interface WorldMapProps {
   onCountryClick?: (id: string) => void;
   projectionType?: 'mercator' | 'orthographic';
   isMemoryMode?: boolean;
+  isPaused?: boolean;
 }
 
 export function WorldMap({ 
@@ -22,7 +23,8 @@ export function WorldMap({
   focusedContinent, 
   onCountryClick,
   projectionType = 'mercator',
-  isMemoryMode = false
+  isMemoryMode = false,
+  isPaused = false
 }: WorldMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +34,7 @@ export function WorldMap({
   const guessedIdsRef = useRef(guessedIds);
   const isMemoryModeRef = useRef(isMemoryMode);
   const highlightedIdRef = useRef(highlightedId);
+  const isPausedRef = useRef(isPaused);
   const projectionRef = useRef<d3.GeoProjection | null>(null);
   const zoomListenerRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const rotationRef = useRef<[number, number, number]>([0, 0, 0]);
@@ -57,6 +60,11 @@ export function WorldMap({
     highlightedIdRef.current = highlightedId;
   }, [highlightedId]);
 
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+    if (mapLoaded) updateMapColors(true);
+  }, [isPaused, mapLoaded]);
+
   const updateMapColors = (immediate = false) => {
     if (!gRef.current) return;
 
@@ -67,25 +75,27 @@ export function WorldMap({
       .attr('fill', (d: any) => {
         const id = String(d.id).padStart(3, '0');
         
-        // Highlight the current guess above all else
-        if (highlightedIdRef.current === id) return '#facc15';
+        if (highlightedIdRef.current === id) {
+          if (isPausedRef.current && isMemoryModeRef.current) return '#262626';
+          return '#facc15';
+        }
         
-        // If it's finished, show the summary (even in memory mode)
         if (isFinishedRef.current) {
           if (guessedIdsRef.current.has(id)) return '#4ade80';
           return '#ef444433';
         }
 
-        // Memory mode behavior: Hide all marks except current highlight
         if (isMemoryModeRef.current) return '#262626';
 
-        // Normal mode behavior
         if (guessedIdsRef.current.has(id)) return '#4ade80';
         return '#262626';
       })
       .attr('stroke', (d: any) => {
         const id = String(d.id).padStart(3, '0');
-        if (highlightedIdRef.current === id) return '#eab308';
+        if (highlightedIdRef.current === id) {
+          if (isPausedRef.current && isMemoryModeRef.current) return '#404040';
+          return '#eab308';
+        }
         
         if (isFinishedRef.current) {
           if (guessedIdsRef.current.has(id)) return '#059669';
@@ -98,60 +108,82 @@ export function WorldMap({
         return '#404040';
       });
 
-    gRef.current.selectAll('.capital-pin').remove();
-    
-    if (highlightedIdRef.current && containerRef.current && projectionRef.current) {
-      const country = COUNTRIES.find(c => c.id === highlightedIdRef.current);
-      if (country && country.capitalCoords) {
-        const coords = projectionRef.current([country.capitalCoords.lng, country.capitalCoords.lat]);
-        if (coords) {
+    // Optimized Pin Handling
+    const pinData = (highlightedIdRef.current && containerRef.current && projectionRef.current) 
+      ? (() => {
+          const country = COUNTRIES.find(c => c.id === highlightedIdRef.current);
+          if (!country || !country.capitalCoords) return [];
+          
+          const proj = projectionRef.current;
+          const coords = proj([country.capitalCoords.lng, country.capitalCoords.lat]);
+          if (!coords || isNaN(coords[0])) return [];
+
           let isVisible = true;
           if (projectionType === 'orthographic') {
-            const rotate = projectionRef.current.rotate();
-            const center: [number, number] = [-rotate[0], -rotate[1]];
-            isVisible = d3.geoDistance(center, [country.capitalCoords.lng, country.capitalCoords.lat]) < Math.PI / 2;
+            const width = dimensionsRef.current.width;
+            const height = dimensionsRef.current.height;
+            const center = proj.invert ? proj.invert([width / 2, height / 2]) : null;
+            if (center) {
+              isVisible = d3.geoDistance(center, [country.capitalCoords.lng, country.capitalCoords.lat]) < Math.PI / 2;
+            }
           }
+          if (!isVisible) return [];
 
-          if (isVisible) {
-            const worldWidth = 2 * Math.PI * projectionRef.current.scale();
-            const instances = projectionType === 'mercator' ? [-1, 0, 1] : [0];
-            
-            instances.forEach(offset => {
-              const pinGroup = gRef.current!.append('g')
-                .attr('class', 'capital-pin')
-                .attr('transform', `translate(${coords[0] + offset * worldWidth}, ${coords[1]})`);
+          const worldScale = proj.scale();
+          const worldWidth = projectionType === 'mercator' ? 2 * Math.PI * worldScale : 0;
+          const instances = projectionType === 'mercator' ? [-1, 0, 1] : [0];
+          
+          return instances.map(offset => ({
+            id: `pin-${country.id}-${offset}`,
+            x: coords[0] + offset * worldWidth,
+            y: coords[1],
+            capital: country.capital
+          }));
+        })()
+      : [];
 
-              pinGroup.append('circle')
-                .attr('r', 4)
-                .attr('fill', '#3b82f6')
-                .attr('opacity', 0.4)
-                .append('animate')
-                .attr('attributeName', 'r')
-                .attr('values', '2;6;2')
-                .attr('dur', '1.5s')
-                .attr('repeatCount', 'indefinite');
+    const pins = gRef.current.selectAll<SVGGElement, any>('.capital-pin')
+      .data(pinData, d => d.id);
 
-              pinGroup.append('circle')
-                .attr('r', 2)
-                .attr('fill', '#3b82f6')
-                .attr('stroke', 'white')
-                .attr('stroke-width', 1);
-                
-              pinGroup.append('text')
-                .attr('y', -6)
-                .attr('text-anchor', 'middle')
-                .attr('fill', 'white')
-                .attr('font-size', '6px')
-                .attr('font-weight', '900')
-                .attr('font-family', 'monospace')
-                .attr('class', 'uppercase')
-                .style('text-shadow', '0 0 10px rgba(0,0,0,0.8)')
-                .text(country.capital || '');
-            });
-          }
-        }
-      }
-    }
+    pins.exit().remove();
+
+    const pinsEnter = pins.enter()
+      .append('g')
+      .attr('class', 'capital-pin');
+
+    pinsEnter.append('circle')
+      .attr('r', 4)
+      .attr('fill', '#3b82f6')
+      .attr('opacity', 0.4)
+      .append('animate')
+      .attr('attributeName', 'r')
+      .attr('values', '2;6;2')
+      .attr('dur', '1.5s')
+      .attr('repeatCount', 'indefinite');
+
+    pinsEnter.append('circle')
+      .attr('r', 2)
+      .attr('fill', '#3b82f6')
+      .attr('stroke', 'white')
+      .attr('stroke-width', 1);
+        
+    pinsEnter.append('text')
+      .attr('y', -6)
+      .attr('text-anchor', 'middle')
+      .attr('fill', 'white')
+      .attr('font-size', '6px')
+      .attr('font-weight', '900')
+      .attr('font-family', 'monospace')
+      .attr('class', 'uppercase pin-label')
+      .style('text-shadow', '0 0 10px rgba(0,0,0,0.8)');
+
+    const pinsAll = pinsEnter.merge(pins);
+    pinsAll.attr('transform', d => `translate(${d.x}, ${d.y})`);
+    
+    pinsAll.select('.pin-label')
+      .text(d => d.capital || '')
+      .attr('font-size', projectionType === 'orthographic' ? '9px' : '6px')
+      .attr('y', projectionType === 'orthographic' ? -9 : -6);
   };
 
   useEffect(() => {
@@ -242,19 +274,23 @@ export function WorldMap({
     const zoomListener = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([1, 15])
       .on('zoom', (event) => {
+        const proj = projectionRef.current;
+        if (!proj) return;
         const { x, y, k } = event.transform;
+        
         if (projectionType === 'orthographic') {
           const baseScale = Math.min(width, height) / 2.5;
-          projection.scale(baseScale * k);
-          const p = d3.geoPath().projection(projection);
+          proj.scale(baseScale * k);
+          const p = d3.geoPath().projection(proj);
           g.selectAll('path').attr('d', p as any);
           updateMapColors(true);
         } else {
-          const worldWidth = 2 * Math.PI * projection.scale() * k;
+          const worldWidth = 2 * Math.PI * proj.scale() * k;
           let tx = x;
           if (tx < -worldWidth) tx += worldWidth;
           if (tx > 0) tx -= worldWidth;
           g.attr('transform', `translate(${tx}, ${y}) scale(${k})`);
+          updateMapColors(true);
         }
       });
     zoomListenerRef.current = zoomListener;
@@ -263,16 +299,18 @@ export function WorldMap({
       const drag = d3.drag<SVGSVGElement, unknown>()
         .on('start', () => { svg.style('cursor', 'grabbing'); })
         .on('drag', (event) => {
-          const rotate = projection.rotate();
-          const k = 75 / projection.scale();
+          const proj = projectionRef.current;
+          if (!proj) return;
+          const rotate = proj.rotate();
+          const k = 75 / proj.scale();
           const nextRotate: [number, number, number] = [
             rotate[0] + event.dx * k,
             rotate[1] - event.dy * k,
             rotate[2]
           ];
-          projection.rotate(nextRotate);
+          proj.rotate(nextRotate);
           rotationRef.current = nextRotate;
-          const p = d3.geoPath().projection(projection);
+          const p = d3.geoPath().projection(proj);
           g.selectAll('path').attr('d', p as any);
           updateMapColors(true);
         })
@@ -281,21 +319,30 @@ export function WorldMap({
       zoomListener.filter((event) => {
         return event.type === 'wheel' || event.ctrlKey || event.type === 'touchstart' || event.type === 'touchmove' || event.type === 'touchend';
       });
+    } else {
+      svg.on('.drag', null);
+      zoomListener.filter((event) => {
+        return !event.button;
+      });
     }
     svg.call(zoomListener);
 
     if (projectionType === 'mercator') {
+      const rotation = rotationRef.current;
+      const centerCoords: [number, number] = [-rotation[0], -rotation[1]];
+      const centerPoint = projection(centerCoords)!;
+      
       const isPortrait = height > width;
       const isMobile = width < 768;
       const k = isPortrait ? 1.45 : (isMobile ? 1.1 : 1.35);
-      const centerCoords: [number, number] = isPortrait ? [20, 20] : (isMobile ? [30, 20] : [95, 30]);
-      const centerPoint = projection(centerCoords)!;
+      
       const tx = width / 2 - centerPoint[0] * k;
       const ty = height / 2 - centerPoint[1] * k;
       const initialTransform = d3.zoomIdentity.translate(tx, ty).scale(k);
       svg.call(zoomListener.transform, initialTransform);
     } else {
-      svg.call(zoomListener.transform, d3.zoomIdentity.scale((svg.node() as any).__zoom?.k || 1));
+      const currentZoom = (svg.node() as any).__zoom?.k || 1;
+      svg.call(zoomListener.transform, d3.zoomIdentity.scale(currentZoom));
     }
 
     let isCancelled = false;
@@ -363,6 +410,8 @@ export function WorldMap({
     return () => {
       isCancelled = true;
       resizeObserver.disconnect();
+      svg.on('.zoom', null);
+      svg.on('.drag', null);
     };
   }, [projectionType]);
 
@@ -420,7 +469,7 @@ export function WorldMap({
 
   useEffect(() => {
     if (mapLoaded) updateMapColors();
-  }, [mapLoaded, guessedIds, highlightedId, isFinished, focusedContinent, projectionType, isMemoryMode]);
+  }, [mapLoaded, guessedIds, highlightedId, isFinished, focusedContinent, projectionType, isMemoryMode, isPaused]);
 
   useEffect(() => {
     if (!highlightedId || isFinished || !gRef.current) return;
@@ -428,7 +477,7 @@ export function WorldMap({
       if (gRef.current && !isFinishedRef.current) {
         gRef.current.selectAll('.capital-pin').transition().duration(500).style('opacity', 0).remove();
       }
-    }, 3000);
+    }, 2000);
     return () => clearTimeout(timer);
   }, [highlightedId, isFinished]);
 

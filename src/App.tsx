@@ -33,7 +33,8 @@ import {
   Pause,
   Play,
   ListFilter,
-  Brain
+  Brain,
+  EyeOff
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -104,6 +105,7 @@ export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [guessedIds, setGuessedIds] = useState<Set<string>>(new Set());
   const [lastGuessedId, setLastGuessedId] = useState<string | null>(null);
+  const [mostRecentGuessedId, setMostRecentGuessedId] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [gameMode, setGameMode] = useState<'zen' | 'challenge'>('zen');
   const [selectedDuration, setSelectedDuration] = useState(10); // Minutes
@@ -134,7 +136,7 @@ export default function App() {
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [user, setUser] = useState<User | null>(null);
-  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[]; userId?: string; userEmail?: string; mode?: 'zen' | 'challenge'; limit?: number }[]>([]);
+  const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[]; userId?: string; userEmail?: string; mode?: 'zen' | 'challenge'; limit?: number; isMemoryMode?: boolean }[]>([]);
   const isAdmin = user?.email === 'f20240342@dubai.bits-pilani.ac.in' || user?.email === 'rudrapatra252006@gmail.com';
   const [adminFilter, setAdminFilter] = useState('');
   const [selectedContinentFilter, setSelectedContinentFilter] = useState<string | null>(null);
@@ -165,7 +167,8 @@ export default function App() {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         mode: gameMode,
         duration: completionTime || 0,
-        limit: gameMode === 'challenge' ? selectedDuration : null
+        limit: gameMode === 'challenge' ? selectedDuration : null,
+        isMemoryMode: isMemoryMode
       };
     }
     return null;
@@ -394,8 +397,8 @@ export default function App() {
         setIsMemoryMode(prev => !prev);
       }
 
-      // Toggle Pause with Alt key (Option)
-      if (e.key === 'Alt') {
+      // Toggle Pause with Alt key (Option) or Command/Ctrl + Pause/F8
+      if (e.key === 'Alt' || ((e.metaKey || e.ctrlKey) && (e.key === 'Pause' || e.key === 'F8'))) {
         if (hasStarted && !isFinished) {
           e.preventDefault();
           setIsPaused(prev => !prev);
@@ -431,6 +434,8 @@ export default function App() {
       return (timeLeft / 600) + 0.5; // Bonus for speed in challenge
     }
   }, [timeElapsed, timeLeft, gameMode]);
+
+  const difficultyMultiplier = isMemoryMode ? 1.5 : 1.0;
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -491,6 +496,7 @@ export default function App() {
         newGuessed.add(matchedCountry.id);
         setGuessedIds(newGuessed);
         setLastGuessedId(matchedCountry.id);
+        setMostRecentGuessedId(matchedCountry.id);
         setInputValue('');
 
         // Flag Feedback
@@ -501,7 +507,7 @@ export default function App() {
         
         // Scoring logic
         const basePoints = getCountryPoints(matchedCountry);
-        const points = Math.floor(basePoints * currentMultiplier);
+        const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier);
 
         setScore(prev => prev + points);
 
@@ -546,6 +552,7 @@ export default function App() {
       guessedIds: Array.from(guessedIds),
       mode: gameMode,
       limit: gameMode === 'challenge' ? selectedDuration : null,
+      isMemoryMode: isMemoryMode,
       userId: user?.uid || null,
       userEmail: user?.email || null,
       createdAt: serverTimestamp()
@@ -670,7 +677,7 @@ export default function App() {
     if (lastGuessedId) {
       const timer = setTimeout(() => {
         setLastGuessedId(null);
-      }, 3000);
+      }, 2000);
       return () => clearTimeout(timer);
     }
   }, [lastGuessedId]);
@@ -1362,9 +1369,15 @@ export default function App() {
                                   )}
                                 </div>
                               )}
-                              <span className="text-[9px] text-neutral-600 font-mono uppercase block truncate">
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase block truncate flex items-center gap-2">
                                 {entry.date} {entry.time} • {entry.guessedIds?.length || 0} Territories 
                                 {entry.mode === 'challenge' ? ` • ${entry.limit}m Limit` : ' • Zen'}
+                                {entry.isMemoryMode && (
+                                  <span className="flex items-center gap-1 text-purple-400 bg-purple-500/10 px-1 rounded-sm border border-purple-500/20">
+                                    <Brain className="w-2 h-2" />
+                                    MEMORY MODE
+                                  </span>
+                                )}
                               </span>
                             </div>
                           </div>
@@ -1413,6 +1426,7 @@ export default function App() {
                                }}
                                projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                                isMemoryMode={false}
+                               isPaused={false}
                              />
                              <div className="absolute top-4 right-4 bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-4 rounded-xl shadow-xl">
                                <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest mb-3">Territorial Analysis</div>
@@ -1494,7 +1508,7 @@ export default function App() {
                                   <MapIcon className="w-3 h-3" /> {leaderboard[selectedRecordIndex].guessedIds?.length || 0} Territories
                                 </div>
                                 <div className="text-[10px] font-mono uppercase text-neutral-500">
-                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time} • {leaderboard[selectedRecordIndex].mode === 'challenge' ? `Challenge (${leaderboard[selectedRecordIndex].limit}m)` : 'Zen Mode'} • {leaderboard[selectedRecordIndex].mode === 'challenge' && (leaderboard[selectedRecordIndex].duration || 0) >= (leaderboard[selectedRecordIndex].limit || 0) * 60 ? <span className="text-rose-500 font-bold">TIMED OUT</span> : `Completed in ${formatTime(leaderboard[selectedRecordIndex].duration || 0)}`}
+                                  {leaderboard[selectedRecordIndex].date} at {leaderboard[selectedRecordIndex].time} • {leaderboard[selectedRecordIndex].mode === 'challenge' ? `Challenge (${leaderboard[selectedRecordIndex].limit}m)` : 'Zen Mode'} • {leaderboard[selectedRecordIndex].isMemoryMode && <span className="text-purple-400 font-bold">STEALTH (1.5X) • </span>}{leaderboard[selectedRecordIndex].mode === 'challenge' && (leaderboard[selectedRecordIndex].duration || 0) >= (leaderboard[selectedRecordIndex].limit || 0) * 60 ? <span className="text-rose-500 font-bold">TIMED OUT</span> : `Completed in ${formatTime(leaderboard[selectedRecordIndex].duration || 0)}`}
                                 </div>
                               </div>
                             </div>
@@ -1526,6 +1540,7 @@ export default function App() {
                   focusedContinent={focusedContinent}
                   projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                   isMemoryMode={isMemoryMode}
+                  isPaused={isPaused}
                 />
               
                 {/* Interactive Overlays */}
@@ -1796,6 +1811,7 @@ export default function App() {
                                   focusedContinent={focusedContinent === "GLOBAL" ? null : focusedContinent}
                                   projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                                   isMemoryMode={false}
+                                  isPaused={false}
                                 />
                               </div>
                           </div>
@@ -2099,7 +2115,7 @@ export default function App() {
                         <span className="text-emerald-500/80">Toggle Globe</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-neutral-500">[OPTION] / [ALT]</span>
+                        <span className="text-neutral-500">[ALT] or [CMD] + [F8]</span>
                         <span className="text-emerald-500/80">Pause / Resume</span>
                       </div>
                       <div className="flex items-center justify-between border-t border-white/5 pt-1.5 mt-1.5">
@@ -2155,12 +2171,33 @@ export default function App() {
                   <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500 border border-emerald-500/30">
                     <BarChart3 className="w-5 h-5" />
                   </div>
+                  <button 
+                    onClick={() => setIsGlobeMode(!isGlobeMode)}
+                    className={cn(
+                      "p-2 rounded-lg border transition-all h-10 w-10 flex items-center justify-center",
+                      isGlobeMode 
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" 
+                        : "bg-neutral-800/50 border-neutral-700 text-neutral-400 hover:text-white"
+                    )}
+                    title="Toggle Globe View"
+                  >
+                    <Globe2 className="w-5 h-5" />
+                  </button>
                   <div>
                     <h2 className="text-xl font-black text-white uppercase tracking-tighter">Territorial Expansion Survey</h2>
                     <p className="text-[9px] text-neutral-500 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
                        Agent: <span className="text-emerald-500">{viewingRecord.name}</span> 
                        <span className="opacity-30">•</span> 
                        Efficiency: <span className="text-emerald-500">{viewingRecord.guessedIds?.length === COUNTRIES.length ? '100' : Math.min(99, Math.round(((viewingRecord.guessedIds?.length || 0) / COUNTRIES.length) * 100))}%</span>
+                       {viewingRecord.isMemoryMode && (
+                         <>
+                           <span className="opacity-30">•</span>
+                           <span className="text-purple-400 flex items-center gap-1">
+                             <Brain className="w-2.5 h-2.5" />
+                             Memory Mode (+50% Bonus)
+                           </span>
+                         </>
+                       )}
                     </p>
                   </div>
                 </div>
@@ -2186,6 +2223,7 @@ export default function App() {
                       focusedContinent={null}
                       projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                       isMemoryMode={false}
+                      isPaused={false}
                     />
                     
                     <AnimatePresence>
@@ -2506,8 +2544,8 @@ export default function App() {
                <div className="grid grid-cols-2 gap-8 py-8 border-y border-white/10 w-full max-w-lg">
                   <div>
                     <p className="text-neutral-500 font-mono text-[9px] uppercase tracking-widest mb-2">Last Identified</p>
-                    {lastGuessedId ? (() => {
-                      const country = COUNTRIES.find(c => c.id === lastGuessedId);
+                    {!isMemoryMode && mostRecentGuessedId ? (() => {
+                      const country = COUNTRIES.find(c => c.id === mostRecentGuessedId);
                       return (
                         <div className="flex items-center gap-3 justify-center">
                           <img 
@@ -2519,7 +2557,16 @@ export default function App() {
                         </div>
                       );
                     })() : (
-                      <p className="text-lg font-bold text-neutral-600 uppercase">None Detected</p>
+                       <div className="flex items-center justify-center gap-2 text-neutral-600">
+                          {isMemoryMode ? (
+                            <>
+                              <EyeOff className="w-4 h-4" />
+                              <p className="text-xs font-mono uppercase tracking-[0.2em]">None Detected</p>
+                            </>
+                          ) : (
+                            <p className="text-lg font-bold uppercase">None Detected</p>
+                          )}
+                       </div>
                     )}
                   </div>
                   <div>

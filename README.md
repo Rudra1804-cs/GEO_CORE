@@ -73,4 +73,15 @@ After every mission, a deep-dive analysis is provided:
 - **Styling**: Tailwind CSS (Cyan/Emerald Tactical Theme)
 
 ---
+
+## 📡 Operational Support & Quotas
+
+Controlled by the **Firebase Spark Protocol**:
+*   **Operational Reads**: 50,000 / day (Reset at 00:00 PST)
+*   **Operational Writes**: 20,000 / day
+*   **Identity Provisioning**: Unlimited via Google Identity Service
+
+> **Officer Note**: If "Quota Exceeded" alerts trigger, all active intelligence syncing will pause until the next tactical day.
+
+---
 **[GEO-CORE]** *v4.5 - Security Clearance Level 4 Required.*
