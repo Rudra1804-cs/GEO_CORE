@@ -13,6 +13,9 @@ import {
   ArrowRight, 
   CheckCircle2, 
   XCircle,
+  Edit2,
+  Check,
+  X,
   BarChart3,
   Map as MapIcon,
   RefreshCcw,
@@ -28,7 +31,8 @@ import {
   HelpCircle,
   Satellite,
   Pause,
-  Play
+  Play,
+  ListFilter
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -51,6 +55,7 @@ import {
   limit, 
   serverTimestamp,
   doc,
+  updateDoc,
   getDocFromServer,
   deleteDoc,
   where
@@ -125,6 +130,8 @@ export default function App() {
   const [showExpandedDetail, setShowExpandedDetail] = useState(false);
   const [selectedExpandedCountryId, setSelectedExpandedCountryId] = useState<string | null>(null);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   const [user, setUser] = useState<User | null>(null);
   const [leaderboard, setLeaderboard] = useState<{ id: string; name: string; score: number; date: string; time: string; duration?: number; guessedIds: string[]; userId?: string; userEmail?: string; mode?: 'zen' | 'challenge'; limit?: number }[]>([]);
   const isAdmin = user?.email === 'f20240342@dubai.bits-pilani.ac.in' || user?.email === 'rudrapatra252006@gmail.com';
@@ -132,6 +139,7 @@ export default function App() {
   const [selectedContinentFilter, setSelectedContinentFilter] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isSatelliteView, setIsSatelliteView] = useState(false);
+  const [expansionSort, setExpansionSort] = useState<'alphabet' | 'wealth'>('alphabet');
   const [isPaused, setIsPaused] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -365,8 +373,8 @@ export default function App() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Toggle Satellite View with Meta key (Command)
-      if (e.key === 'Meta') {
+      // Toggle Satellite View with Meta/Ctrl + X
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x') {
         e.preventDefault();
         setIsSatelliteView(prev => !prev);
       }
@@ -606,6 +614,39 @@ export default function App() {
       setLeaderboard(originalLeaderboard);
       handleFirestoreError(error, OperationType.DELETE, `leaderboard/${entry.id}`);
       setFeedback({ text: 'Access denied: Deletion protocol failed.', type: 'error' });
+      setTimeout(() => setFeedback(null), 3000);
+    }
+  };
+
+  const handleRename = async (id: string, newName: string) => {
+    if (!newName.trim()) {
+      setEditingRecordId(null);
+      return;
+    }
+    
+    // Optimistic update
+    const previousLeaderboard = [...leaderboard];
+    const updatedLeaderboard = leaderboard.map(entry => 
+      entry.id === id ? { ...entry, name: newName.trim() } : entry
+    );
+    setLeaderboard(updatedLeaderboard);
+    setEditingRecordId(null);
+
+    if (id.startsWith('local-')) {
+      localStorage.setItem(LOCAL_RECORDS_KEY, JSON.stringify(updatedLeaderboard));
+      setFeedback({ text: 'Local record renamed.', type: 'success' });
+      setTimeout(() => setFeedback(null), 3000);
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'leaderboard', id), { name: newName.trim() });
+      setFeedback({ text: 'Intelligence log updated.', type: 'success' });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (error) {
+      setLeaderboard(previousLeaderboard);
+      handleFirestoreError(error, OperationType.UPDATE, `leaderboard/${id}`);
+      setFeedback({ text: 'Update failed: Data transmission error.', type: 'error' });
       setTimeout(() => setFeedback(null), 3000);
     }
   };
@@ -1202,14 +1243,69 @@ export default function App() {
                                 </button>
                               )}
                             </div>
-                            <div className="text-left flex-1">
-                              <h4 className={cn("text-sm font-black uppercase tracking-tighter flex items-center gap-2", selectedRecordIndex === i ? "text-white" : "text-neutral-400 group-hover:text-neutral-200")}>
-                                {entry.name}
-                                {isAdmin && entry.userEmail && (
-                                  <span className="text-[8px] font-mono text-neutral-600 lowercase opacity-60">[{entry.userEmail}]</span>
-                                )}
-                              </h4>
-                              <span className="text-[9px] text-neutral-600 font-mono uppercase">
+                            <div className="text-left flex-1 min-w-0">
+                              {editingRecordId === entry.id ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    value={editingName}
+                                    onChange={(e) => setEditingName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleRename(entry.id, editingName);
+                                      if (e.key === 'Escape') setEditingRecordId(null);
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="bg-black/50 border border-emerald-500/50 rounded px-2 py-0.5 text-xs font-bold text-white outline-none w-full uppercase"
+                                  />
+                                  <div className="flex items-center">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRename(entry.id, editingName);
+                                      }}
+                                      className="p-1 hover:text-emerald-500 text-emerald-600 transition-colors"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingRecordId(null);
+                                      }}
+                                      className="p-1 hover:text-red-500 text-red-600 transition-colors"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 group/name">
+                                  <h4 className={cn(
+                                    "text-sm font-black uppercase tracking-tighter truncate",
+                                    selectedRecordIndex === i ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
+                                  )}>
+                                    {entry.name}
+                                  </h4>
+                                  {(entry.userId === user?.uid || (!user && entry.id?.startsWith('local-'))) && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingRecordId(entry.id);
+                                        setEditingName(entry.name);
+                                      }}
+                                      className="opacity-0 group-hover/name:opacity-100 p-1 text-neutral-500 hover:text-emerald-500 transition-all shrink-0"
+                                      title="Rename Mission"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                  {isAdmin && entry.userEmail && (
+                                    <span className="text-[8px] font-mono text-neutral-600 lowercase opacity-60 truncate">[{entry.userEmail}]</span>
+                                  )}
+                                </div>
+                              )}
+                              <span className="text-[9px] text-neutral-600 font-mono uppercase block truncate">
                                 {entry.date} {entry.time} • {entry.guessedIds?.length || 0} Territories 
                                 {entry.mode === 'challenge' ? ` • ${entry.limit}m Limit` : ' • Zen'}
                               </span>
@@ -1729,13 +1825,28 @@ export default function App() {
                               <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 h-[500px]">
                                 <div className="flex flex-col bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden font-mono">
                                   <div className="px-5 py-3 bg-emerald-500/10 border-b border-emerald-500/20 flex justify-between items-center">
-                                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Secured Territories</span>
-                                    <span className="text-xs font-bold text-emerald-600">
-                                      {(focusedContinent === "GLOBAL" || !focusedContinent) ? guessedIds.size : continentStats[focusedContinent].guessedList.length} Units
+                                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      Secured Territories ({(focusedContinent === "GLOBAL" || !focusedContinent) ? guessedIds.size : continentStats[focusedContinent]?.guessedList.length || 0})
                                     </span>
+                                    <button
+                                      onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
+                                      className="p-1 hover:bg-emerald-500/10 rounded transition-all group flex items-center gap-2"
+                                      title={expansionSort === 'alphabet' ? 'Sort by Wealth' : 'Sort Alphabetically'}
+                                    >
+                                      <span className="text-[8px] font-mono text-neutral-500 group-hover:text-emerald-500 uppercase">{expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}</span>
+                                      <ListFilter className={cn("w-3 h-3", expansionSort === 'alphabet' ? "text-neutral-500" : "text-emerald-500")} />
+                                    </button>
                                   </div>
                                   <div className="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-1.5">
-                                    {((focusedContinent === "GLOBAL" || !focusedContinent) ? Array.from(guessedIds).map(id => COUNTRIES.find(c => c.id === id)!) : continentStats[focusedContinent].guessedList).map(c => (
+                                    {((focusedContinent === "GLOBAL" || !focusedContinent) 
+                                      ? Array.from(guessedIds).map(id => COUNTRIES.find(c => c.id === id)!) 
+                                      : (continentStats[focusedContinent]?.guessedList || []))
+                                      .sort((a, b) => {
+                                        if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
+                                        return (b.gdp || 0) - (a.gdp || 0);
+                                      })
+                                      .map(c => (
                                       <div key={c.id} title={c.name} className="px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/10 text-[11px] text-emerald-200/80 flex items-center gap-3 group hover:bg-emerald-500/10 transition-colors">
                                         <img 
                                           src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`} 
@@ -1754,13 +1865,28 @@ export default function App() {
 
                                 <div className="flex flex-col bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden font-mono text-sm">
                                   <div className="px-5 py-3 bg-rose-500/10 border-b border-rose-500/20 flex justify-between items-center">
-                                    <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Security Gaps</span>
-                                    <span className="text-xs font-bold text-rose-600">
-                                      {(focusedContinent === "GLOBAL" || !focusedContinent) ? (COUNTRIES.length - guessedIds.size) : continentStats[focusedContinent].missedList.length} Units
+                                    <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
+                                      <XCircle className="w-3 h-3" />
+                                      Security Gaps ({(focusedContinent === "GLOBAL" || !focusedContinent) ? (COUNTRIES.length - guessedIds.size) : (continentStats[focusedContinent]?.missedList.length || 0)})
                                     </span>
+                                    <button
+                                      onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
+                                      className="p-1 hover:bg-rose-500/10 rounded transition-all group flex items-center gap-2"
+                                      title={expansionSort === 'alphabet' ? 'Sort by Wealth' : 'Sort Alphabetically'}
+                                    >
+                                      <span className="text-[8px] font-mono text-neutral-500 group-hover:text-rose-500 uppercase">{expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}</span>
+                                      <ListFilter className={cn("w-3 h-3", expansionSort === 'alphabet' ? "text-neutral-500" : "text-rose-500")} />
+                                    </button>
                                   </div>
                                   <div className="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-1.5">
-                                    {((focusedContinent === "GLOBAL" || !focusedContinent) ? COUNTRIES.filter(c => !guessedIds.has(c.id)) : continentStats[focusedContinent].missedList).map(c => (
+                                    {((focusedContinent === "GLOBAL" || !focusedContinent) 
+                                      ? COUNTRIES.filter(c => !guessedIds.has(c.id)) 
+                                      : (continentStats[focusedContinent]?.missedList || []))
+                                      .sort((a, b) => {
+                                        if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
+                                        return (b.gdp || 0) - (a.gdp || 0);
+                                      })
+                                      .map(c => (
                                       <div key={c.id} title={c.name} className="px-3 py-2 rounded-xl bg-rose-500/5 border border-rose-500/10 text-[11px] text-rose-200/80 flex items-center gap-3 group hover:bg-rose-500/10 transition-colors">
                                         <img 
                                           src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`} 
@@ -1900,7 +2026,7 @@ export default function App() {
                         <span className="text-emerald-500/80">Focus Input</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-neutral-500">[COMMAND] / [META]</span>
+                        <span className="text-neutral-500">[CMD / CTRL] + [X]</span>
                         <span className="text-emerald-500/80">Toggle Satellite</span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -2150,12 +2276,27 @@ export default function App() {
                         <CheckCircle2 className="w-3 h-3" />
                         Secured ({(viewingRecord.guessedIds || []).filter(id => !selectedContinentFilter || COUNTRIES.find(c => c.id === id)?.continent === selectedContinentFilter).length})
                       </span>
+                      <button
+                        onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
+                        className="p-1.5 hover:bg-emerald-500/10 rounded-lg transition-all group flex items-center gap-2"
+                        title={expansionSort === 'alphabet' ? 'Switch to Wealth Sort' : 'Switch to Alphabetical Sort'}
+                      >
+                        <span className="text-[8px] font-mono font-bold text-neutral-500 group-hover:text-emerald-500 uppercase">
+                          {expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}
+                        </span>
+                        <ListFilter className={cn("w-3 h-3 transition-colors", expansionSort === 'alphabet' ? "text-neutral-500 group-hover:text-emerald-500" : "text-emerald-500")} />
+                      </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                       {(viewingRecord.guessedIds || [])
-                        .filter(id => !selectedContinentFilter || COUNTRIES.find(c => c.id === id)?.continent === selectedContinentFilter)
-                        .map(id => {
-                          const country = COUNTRIES.find(c => c.id === id);
+                        .map(id => COUNTRIES.find(c => c.id === id))
+                        .filter((c): c is typeof COUNTRIES[0] => !!c && (!selectedContinentFilter || c.continent === selectedContinentFilter))
+                        .sort((a, b) => {
+                          if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
+                          return (b.gdp || 0) - (a.gdp || 0);
+                        })
+                        .map(country => {
+                          const id = country.id;
                           const isSelected = selectedExpandedCountryId === id;
                           return (
                             <button 
@@ -2166,9 +2307,9 @@ export default function App() {
                                 isSelected ? "bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:text-emerald-400"
                               )}
                             >
-                              <img src={`https://flagcdn.com/w20/${country?.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10" alt="" />
-                              <span className="flex-1 text-left truncate font-bold">{country?.name}</span>
-                              <span className="text-[8px] opacity-40">${Math.floor((country?.gdp || 0)/1000).toLocaleString()}B</span>
+                              <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10" alt="" />
+                              <span className="flex-1 text-left truncate font-bold">{country.name}</span>
+                              <span className="text-[8px] opacity-40">${Math.floor((country.gdp || 0)/1000).toLocaleString()}B</span>
                             </button>
                           );
                         })}
@@ -2181,25 +2322,40 @@ export default function App() {
                         <XCircle className="w-3 h-3" />
                         Missed ({COUNTRIES.filter(c => !viewingRecord.guessedIds?.includes(c.id) && (!selectedContinentFilter || c.continent === selectedContinentFilter)).length})
                       </span>
+                      <button
+                        onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
+                        className="p-1.5 hover:bg-red-500/10 rounded-lg transition-all group flex items-center gap-2"
+                        title={expansionSort === 'alphabet' ? 'Switch to Wealth Sort' : 'Switch to Alphabetical Sort'}
+                      >
+                        <span className="text-[8px] font-mono font-bold text-neutral-500 group-hover:text-red-500 uppercase">
+                          {expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}
+                        </span>
+                        <ListFilter className={cn("w-3 h-3 transition-colors", expansionSort === 'alphabet' ? "text-neutral-500 group-hover:text-red-500" : "text-red-500")} />
+                      </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                      {COUNTRIES.filter(c => !viewingRecord.guessedIds?.includes(c.id) && (!selectedContinentFilter || c.continent === selectedContinentFilter)).map(country => {
-                        const isSelected = selectedExpandedCountryId === country.id;
-                        return (
-                          <button 
-                            key={country.id} 
-                            onClick={() => setSelectedExpandedCountryId(isSelected ? null : country.id)}
-                            className={cn(
-                              "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
-                              isSelected ? "bg-red-500/20 border-red-400 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-500 hover:text-red-400"
-                            )}
-                          >
-                            <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10 opacity-60" alt="" />
-                            <span className="flex-1 text-left truncate font-bold">{country.name}</span>
-                            <span className="text-[8px] opacity-40">${Math.floor(country.gdp/1000).toLocaleString()}B</span>
-                          </button>
-                        );
-                      })}
+                      {COUNTRIES.filter(c => !viewingRecord.guessedIds?.includes(c.id) && (!selectedContinentFilter || c.continent === selectedContinentFilter))
+                        .sort((a, b) => {
+                          if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
+                          return (b.gdp || 0) - (a.gdp || 0);
+                        })
+                        .map(country => {
+                          const isSelected = selectedExpandedCountryId === country.id;
+                          return (
+                            <button 
+                              key={country.id} 
+                              onClick={() => setSelectedExpandedCountryId(isSelected ? null : country.id)}
+                              className={cn(
+                                "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
+                                isSelected ? "bg-red-500/20 border-red-400 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-500 hover:text-red-400"
+                              )}
+                            >
+                              <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10 opacity-60" alt="" />
+                              <span className="flex-1 text-left truncate font-bold">{country.name}</span>
+                              <span className="text-[8px] opacity-40">${Math.floor(country.gdp/1000).toLocaleString()}B</span>
+                            </button>
+                          );
+                        })}
                     </div>
                   </div>
                 </div>
