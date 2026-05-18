@@ -34,7 +34,8 @@ import {
   Play,
   ListFilter,
   Brain,
-  EyeOff
+  EyeOff,
+  ChevronRight
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -143,6 +144,7 @@ export default function App() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isSatelliteView, setIsSatelliteView] = useState(false);
   const [isGlobeMode, setIsGlobeMode] = useState(false);
+  const [isTerritorialPanelCollapsed, setIsTerritorialPanelCollapsed] = useState(false);
   const [isMemoryMode, setIsMemoryMode] = useState(false);
   const [expansionSort, setExpansionSort] = useState<'alphabet' | 'wealth'>('alphabet');
   const [isPaused, setIsPaused] = useState(false);
@@ -2225,6 +2227,19 @@ export default function App() {
                       isMemoryMode={false}
                       isPaused={false}
                     />
+
+                    <button 
+                      onClick={() => setIsTerritorialPanelCollapsed(!isTerritorialPanelCollapsed)}
+                      className={cn(
+                        "absolute right-4 top-1/2 -translate-y-1/2 z-30",
+                        "w-10 h-10 bg-neutral-900/90 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center",
+                        "text-neutral-500 hover:text-emerald-500 transition-all shadow-2xl",
+                        isTerritorialPanelCollapsed ? "right-1" : ""
+                      )}
+                      title={isTerritorialPanelCollapsed ? "Expand Panel" : "Collapse Panel"}
+                    >
+                      <ChevronRight className={cn("w-5 h-5 transition-transform duration-300", isTerritorialPanelCollapsed ? "rotate-180" : "rotate-0")} />
+                    </button>
                     
                     <AnimatePresence>
                       {selectedExpandedCountryId && (
@@ -2332,7 +2347,16 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="w-96 flex flex-col gap-4 shrink-0 overflow-hidden">
+                <motion.div 
+                  initial={false}
+                  animate={{ 
+                    width: isTerritorialPanelCollapsed ? 0 : 384,
+                    opacity: isTerritorialPanelCollapsed ? 0 : 1,
+                    marginRight: isTerritorialPanelCollapsed ? -32 : 0
+                  }}
+                  transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                  className="flex flex-col gap-4 shrink-0 overflow-hidden"
+                >
                   <div className="grid grid-cols-1 gap-4 shrink-0">
                     {(() => {
                       const continent = selectedContinentFilter;
@@ -2467,7 +2491,7 @@ export default function App() {
                         })}
                     </div>
                   </div>
-                </div>
+                </motion.div>
 
 
               </div>
