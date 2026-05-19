@@ -43,6 +43,8 @@ export function WorldMap({
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const dimensionsRef = useRef({ width: 0, height: 0 });
+  const lastInteractionTimeRef = useRef(Date.now());
+  const autoRotateRef = useRef(false);
 
   useEffect(() => {
     isFinishedRef.current = isFinished;
@@ -274,6 +276,7 @@ export function WorldMap({
     const zoomListener = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([1, 15])
       .on('zoom', (event) => {
+        lastInteractionTimeRef.current = Date.now();
         const proj = projectionRef.current;
         if (!proj) return;
         const { x, y, k } = event.transform;
@@ -297,8 +300,12 @@ export function WorldMap({
 
     if (projectionType === 'orthographic') {
       const drag = d3.drag<SVGSVGElement, unknown>()
-        .on('start', () => { svg.style('cursor', 'grabbing'); })
+        .on('start', () => { 
+          lastInteractionTimeRef.current = Date.now();
+          svg.style('cursor', 'grabbing'); 
+        })
         .on('drag', (event) => {
+          lastInteractionTimeRef.current = Date.now();
           const proj = projectionRef.current;
           if (!proj) return;
           const rotate = proj.rotate();
@@ -417,22 +424,50 @@ export function WorldMap({
 
   const activeKeys = useRef<Set<string>>(new Set());
   useEffect(() => {
+    const handleGlobalInteraction = () => {
+      lastInteractionTimeRef.current = Date.now();
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      handleGlobalInteraction();
+      
+      // Toggle rotation with Cmd+B or Ctrl+B - works even if typing
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        if (document.activeElement?.tagName !== 'INPUT') {
+          e.preventDefault();
+          autoRotateRef.current = !autoRotateRef.current;
+          return;
+        }
+      }
+
       if (document.activeElement?.tagName === 'INPUT') return;
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '_'].includes(e.key)) activeKeys.current.add(e.key);
+
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '_'].includes(e.key)) {
+        activeKeys.current.add(e.key);
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => { activeKeys.current.delete(e.key); };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('mousemove', handleGlobalInteraction);
+    window.addEventListener('mousedown', handleGlobalInteraction);
+    window.addEventListener('touchstart', handleGlobalInteraction);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mousemove', handleGlobalInteraction);
+      window.removeEventListener('mousedown', handleGlobalInteraction);
+      window.removeEventListener('touchstart', handleGlobalInteraction);
     };
   }, []);
 
   useEffect(() => {
     let animationFrameId: number;
     const tick = () => {
+      let needsRefresh = false;
+
       if (activeKeys.current.size > 0 && svgRef.current && zoomListenerRef.current) {
         const svg = d3.select(svgRef.current);
         const zoomListener = zoomListenerRef.current;
@@ -452,15 +487,33 @@ export function WorldMap({
             const nextRotate: [number, number, number] = [rotate[0] + dx * k * 5, rotate[1] - dy * k * 5, rotate[2]];
             projectionRef.current.rotate(nextRotate);
             rotationRef.current = nextRotate;
-            const p = d3.geoPath().projection(projectionRef.current);
-            gRef.current?.selectAll('path').attr('d', p as any);
-            updateMapColors(true);
+            needsRefresh = true;
           } else {
             svg.call(zoomListener.translateBy, dx, dy);
           }
         }
         if (scaleFactor !== 1) svg.call(zoomListener.scaleBy, scaleFactor);
       }
+
+      // Rotate if auto-rotate is toggled on OR after 5 seconds of inaction
+      if (projectionType === 'orthographic' && 
+          projectionRef.current && 
+          !isPausedRef.current && 
+          activeKeys.current.size === 0 && 
+          (autoRotateRef.current || Date.now() - lastInteractionTimeRef.current > 5000)) {
+        const rotate = projectionRef.current.rotate();
+        const nextRotate: [number, number, number] = [rotate[0] + 0.05, rotate[1], rotate[2]];
+        projectionRef.current.rotate(nextRotate);
+        rotationRef.current = nextRotate;
+        needsRefresh = true;
+      }
+
+      if (needsRefresh && gRef.current && projectionRef.current) {
+        const p = d3.geoPath().projection(projectionRef.current);
+        gRef.current.selectAll('path').attr('d', p as any);
+        updateMapColors(true);
+      }
+
       animationFrameId = requestAnimationFrame(tick);
     };
     animationFrameId = requestAnimationFrame(tick);
