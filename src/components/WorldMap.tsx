@@ -14,6 +14,7 @@ interface WorldMapProps {
   projectionType?: 'mercator' | 'orthographic';
   isMemoryMode?: boolean;
   isPaused?: boolean;
+  highlightedAllianceMemberIds?: Set<string> | null;
 }
 
 export function WorldMap({ 
@@ -24,7 +25,8 @@ export function WorldMap({
   onCountryClick,
   projectionType = 'mercator',
   isMemoryMode = false,
-  isPaused = false
+  isPaused = false,
+  highlightedAllianceMemberIds = null
 }: WorldMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,6 +37,7 @@ export function WorldMap({
   const isMemoryModeRef = useRef(isMemoryMode);
   const highlightedIdRef = useRef(highlightedId);
   const isPausedRef = useRef(isPaused);
+  const highlightedAllianceMemberIdsRef = useRef(highlightedAllianceMemberIds);
   const projectionRef = useRef<d3.GeoProjection | null>(null);
   const zoomListenerRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const rotationRef = useRef<[number, number, number]>([0, 0, 0]);
@@ -63,6 +66,10 @@ export function WorldMap({
   }, [highlightedId]);
 
   useEffect(() => {
+    highlightedAllianceMemberIdsRef.current = highlightedAllianceMemberIds;
+  }, [highlightedAllianceMemberIds]);
+
+  useEffect(() => {
     isPausedRef.current = isPaused;
     if (mapLoaded) updateMapColors(true);
   }, [isPaused, mapLoaded]);
@@ -81,6 +88,11 @@ export function WorldMap({
           if (isPausedRef.current && isMemoryModeRef.current) return '#262626';
           return '#facc15';
         }
+
+        if (highlightedAllianceMemberIdsRef.current && highlightedAllianceMemberIdsRef.current.has(id)) {
+          // Tactical alliance blue color
+          return '#3b82f6';
+        }
         
         if (isFinishedRef.current) {
           if (guessedIdsRef.current.has(id)) return '#4ade80';
@@ -97,6 +109,11 @@ export function WorldMap({
         if (highlightedIdRef.current === id) {
           if (isPausedRef.current && isMemoryModeRef.current) return '#404040';
           return '#eab308';
+        }
+
+        if (highlightedAllianceMemberIdsRef.current && highlightedAllianceMemberIdsRef.current.has(id)) {
+          // Tactical light-blue stroke
+          return '#60a5fa';
         }
         
         if (isFinishedRef.current) {
@@ -502,7 +519,7 @@ export function WorldMap({
           activeKeys.current.size === 0 && 
           (autoRotateRef.current || Date.now() - lastInteractionTimeRef.current > 5000)) {
         const rotate = projectionRef.current.rotate();
-        const nextRotate: [number, number, number] = [rotate[0] + 0.05, rotate[1], rotate[2]];
+        const nextRotate: [number, number, number] = [rotate[0] + 0.015, rotate[1], rotate[2]];
         projectionRef.current.rotate(nextRotate);
         rotationRef.current = nextRotate;
         needsRefresh = true;
@@ -522,7 +539,7 @@ export function WorldMap({
 
   useEffect(() => {
     if (mapLoaded) updateMapColors();
-  }, [mapLoaded, guessedIds, highlightedId, isFinished, focusedContinent, projectionType, isMemoryMode, isPaused]);
+  }, [mapLoaded, guessedIds, highlightedId, isFinished, focusedContinent, projectionType, isMemoryMode, isPaused, highlightedAllianceMemberIds]);
 
   useEffect(() => {
     if (!highlightedId || isFinished || !gRef.current) return;

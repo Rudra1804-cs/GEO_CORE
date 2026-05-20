@@ -19,7 +19,6 @@ import {
   BarChart3,
   Map as MapIcon,
   RefreshCcw,
-  Flag,
   Globe2,
   TrendingUp,
   LayoutDashboard,
@@ -35,7 +34,12 @@ import {
   ListFilter,
   Brain,
   EyeOff,
-  ChevronRight
+  ChevronRight,
+  Flag,
+  Shuffle,
+  Target,
+  Keyboard,
+  ExternalLink
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -63,6 +67,24 @@ import {
   deleteDoc,
   where
 } from 'firebase/firestore';
+
+import natoLogo from './assets/images/nato_logo_1779266800257.png';
+import auLogo from './assets/images/african_union_logo_1779266821461.png';
+import opecLogo from './assets/images/opec_logo_1779266769152.png';
+import euLogo from './assets/images/european_union_logo_1779266840196.png';
+import bricsLogo from './assets/images/brics_logo_1779266857465.png';
+import oasLogo from './assets/images/oas_logo_1779266871468.png';
+import arabLeagueLogo from './assets/images/arab_league_logo_1779266887517.png';
+import unLogo from './assets/images/un_logo_1779269188592.png';
+import g7Logo from './assets/images/g7_logo_1779269208379.png';
+import scoLogo from './assets/images/sco_logo_1779269228129.png';
+import aseanLogo from './assets/images/asean_logo_1779270136171.png';
+import cstoLogo from './assets/images/csto_logo_1779271659765.png';
+import aesLogo from './assets/images/aes_logo_1779271678816.png';
+import mercosurLogo from './assets/images/mercosur_logo_1779271693880.png';
+import g20Logo from './assets/images/g20_logo_1779271707249.png';
+import gccLogo from './assets/images/gcc_logo_1779271723989.png';
+import commonwealthLogo from './assets/images/commonwealth_logo_1779271739639.png';
 
 enum OperationType {
   CREATE = 'create',
@@ -102,6 +124,179 @@ const handleFirestoreError = (error: unknown, operationType: OperationType, path
 
 const LOCAL_RECORDS_KEY = 'global_surveillance_guest_records';
 
+const ALLIANCES_DATA = [
+  {
+    id: "UN",
+    name: "UN",
+    fullName: "United Nations",
+    badgeColor: "bg-blue-950/40 border-blue-500/30 hover:bg-blue-900/30",
+    textColor: "text-blue-400",
+    logoUrl: unLogo,
+    description: "An international organization founded in 1945. It is currently made up of 193 Member States.",
+    matches: (country: any) => true,
+  },
+  {
+    id: "EU",
+    name: "EU",
+    fullName: "European Union",
+    badgeColor: "bg-indigo-950/40 border-indigo-500/30 hover:bg-indigo-900/30",
+    textColor: "text-indigo-300",
+    logoUrl: euLogo,
+    description: "A unique economic and political union between 27 European countries.",
+    matches: (country: any) => ["be", "bg", "cz", "dk", "de", "ee", "ie", "gr", "es", "fr", "hr", "it", "cy", "lv", "lt", "lu", "hu", "mt", "nl", "at", "pl", "pt", "ro", "si", "sk", "fi", "se"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "NATO",
+    name: "NATO",
+    fullName: "North Atlantic Treaty",
+    badgeColor: "bg-sky-950/40 border-sky-500/35 hover:bg-sky-900/40",
+    textColor: "text-sky-300",
+    logoUrl: natoLogo,
+    description: "A military alliance established by the North Atlantic Treaty in 1949.",
+    matches: (country: any) => ["us", "ca", "gb", "fr", "de", "it", "es", "nl", "be", "lu", "dk", "no", "is", "pt", "gr", "tr", "pl", "hu", "cz", "ee", "lv", "lt", "sk", "si", "bg", "ro", "al", "hr", "me", "mk", "fi", "se"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "G7",
+    name: "G7",
+    fullName: "Group of Seven",
+    badgeColor: "bg-zinc-800/50 border-zinc-700/40 hover:bg-zinc-700/30",
+    textColor: "text-slate-300",
+    logoUrl: g7Logo,
+    description: "An informal forum of seven of the world's advanced economies.",
+    matches: (country: any) => ["us", "jp", "de", "fr", "gb", "it", "ca"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "ASEAN",
+    name: "ASEAN",
+    fullName: "SE Asian Nations",
+    badgeColor: "bg-rose-950/40 border-rose-500/30 hover:bg-rose-900/30",
+    textColor: "text-rose-300",
+    logoUrl: aseanLogo,
+    description: "A political and economic union of 10 member states in Southeast Asia.",
+    matches: (country: any) => ["id", "my", "ph", "sg", "th", "vn", "kh", "la", "mm", "bn"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "AU",
+    name: "AU",
+    fullName: "African Union",
+    badgeColor: "bg-emerald-950/40 border-emerald-500/30 hover:bg-emerald-900/30",
+    textColor: "text-emerald-300",
+    logoUrl: auLogo,
+    description: "A continental union consisting of fifty-five member states located on the continent of Africa.",
+    matches: (country: any) => country.continent === "Africa",
+  },
+  {
+    id: "BRICS",
+    name: "BRICS",
+    fullName: "BRICS Alliance",
+    badgeColor: "bg-purple-950/40 border-purple-500/30 hover:bg-purple-900/30",
+    textColor: "text-purple-300",
+    logoUrl: bricsLogo,
+    description: "An alliance of major emerging national economies, forming an economic and political bloc.",
+    matches: (country: any) => ["br", "ru", "in", "cn", "za", "eg", "et", "ir", "ae"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "SCO",
+    name: "SCO",
+    fullName: "Shanghai Cooperation",
+    badgeColor: "bg-teal-950/40 border-teal-500/25 hover:bg-teal-900/30",
+    textColor: "text-teal-400",
+    logoUrl: scoLogo,
+    description: "A Eurasian political, economic, international security and defense organization.",
+    matches: (country: any) => ["cn", "ru", "kz", "kg", "tj", "uz", "in", "pk", "ir", "by"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "OPEC",
+    name: "OPEC",
+    fullName: "Petroleum Exporters",
+    badgeColor: "bg-amber-950/40 border-amber-500/30 hover:bg-amber-900/30",
+    textColor: "text-amber-300",
+    logoUrl: opecLogo,
+    description: "An organization of 12 co-operating oil-exporting nations.",
+    matches: (country: any) => ["sa", "iq", "ir", "dz", "ao", "ga", "gq", "kw", "ly", "ng", "cg", "ve"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "Arab League",
+    name: "Arab League",
+    fullName: "League of Arab States",
+    badgeColor: "bg-emerald-950/40 border-emerald-500/20 hover:bg-emerald-900/30",
+    textColor: "text-emerald-400",
+    logoUrl: arabLeagueLogo,
+    description: "A regional organization of Arab states in Africa and Western Asia.",
+    matches: (country: any) => ["eg", "sa", "ae", "jo", "lb", "sy", "iq", "ir", "kw", "qa", "om", "ye", "ly", "dz", "ma", "tn", "sd", "so", "dj", "mr", "bh"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "OAS",
+    name: "OAS",
+    fullName: "American States",
+    badgeColor: "bg-blue-950/30 border-blue-500/20 hover:bg-blue-900/30",
+    textColor: "text-blue-300",
+    logoUrl: oasLogo,
+    description: "An international organization for regional solidarity and cooperation among member states in the Americas.",
+    matches: (country: any) => country.continent === "North America" || country.continent === "South America",
+  },
+  {
+    id: "MERCOSUR",
+    name: "MERCOSUR",
+    fullName: "Southern Common Market",
+    badgeColor: "bg-teal-950/40 border-teal-500/30 hover:bg-teal-900/30",
+    textColor: "text-teal-300",
+    logoUrl: mercosurLogo,
+    description: "A South American trade bloc established by the Treaty of Asunción in 1991.",
+    matches: (country: any) => ["ar", "br", "py", "uy", "ve", "bo"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "CSTO",
+    name: "CSTO",
+    fullName: "Collective Security Treaty Org.",
+    badgeColor: "bg-blue-950/40 border-blue-500/30 hover:bg-blue-900/40",
+    textColor: "text-blue-300",
+    logoUrl: cstoLogo,
+    description: "An Eurasian intergovernmental military alliance consisting of select post-Soviet states.",
+    matches: (country: any) => ["am", "by", "kz", "kg", "ru", "tj"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "AES",
+    name: "AES",
+    fullName: "Alliance of Sahel States",
+    badgeColor: "bg-emerald-950/40 border-emerald-500/25 hover:bg-emerald-900/30",
+    textColor: "text-emerald-300",
+    logoUrl: aesLogo,
+    description: "A mutual defense pact between Mali, Niger, and Burkina Faso created in September 2023.",
+    matches: (country: any) => ["ml", "bf", "ne"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "G20",
+    name: "G20",
+    fullName: "Group of Twenty",
+    badgeColor: "bg-slate-900/50 border-slate-700/40 hover:bg-slate-800/40",
+    textColor: "text-slate-200",
+    logoUrl: g20Logo,
+    description: "A premier intergovernmental forum comprising 19 sovereign countries and regional unions.",
+    matches: (country: any) => ["ar", "au", "br", "ca", "cn", "fr", "de", "in", "id", "it", "jp", "mx", "ru", "sa", "za", "kr", "tr", "gb", "us"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "GCC",
+    name: "GCC",
+    fullName: "Gulf Cooperation Council",
+    badgeColor: "bg-amber-950/40 border-amber-500/20 hover:bg-amber-900/30",
+    textColor: "text-amber-400",
+    logoUrl: gccLogo,
+    description: "A regional, intergovernmental political and economic union of Arab states in the Persian Gulf.",
+    matches: (country: any) => ["bh", "kw", "om", "qa", "sa", "ae"].includes(country.code.toLowerCase()),
+  },
+  {
+    id: "Commonwealth",
+    name: "Commonwealth",
+    fullName: "Commonwealth of Nations",
+    badgeColor: "bg-sky-950/40 border-sky-500/30 hover:bg-sky-900/30",
+    textColor: "text-sky-300",
+    logoUrl: commonwealthLogo,
+    description: "A political association of 56 member states, mostly former territories of the British Empire.",
+    matches: (country: any) => ["gb", "ca", "au", "nz", "in", "pk", "bd", "lk", "my", "sg", "za", "ng", "gh", "ke", "bb", "bs", "bn", "cy", "mt", "mz", "rw", "tz", "ug", "zm", "zw", "fj", "gd", "ag", "dm", "lc"].includes(country.code.toLowerCase()),
+  }
+];
+
 export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [guessedIds, setGuessedIds] = useState<Set<string>>(new Set());
@@ -109,6 +304,15 @@ export default function App() {
   const [mostRecentGuessedId, setMostRecentGuessedId] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [gameMode, setGameMode] = useState<'zen' | 'challenge'>('zen');
+  const [gameType, setGameType] = useState<'typing' | 'flag'>('typing');
+  const [showFlagQuantityPrompt, setShowFlagQuantityPrompt] = useState(false);
+  const [flagGameMode, setFlagGameMode] = useState<'timed' | 'count'>('timed');
+  const [flagCountLimit, setFlagCountLimit] = useState(20);
+  const [currentTargetFlagId, setCurrentTargetFlagId] = useState<string | null>(null);
+  const [flagQueue, setFlagQueue] = useState<string[]>([]);
+  const [originalFlagQueue, setOriginalFlagQueue] = useState<string[]>([]);
+  const [skippedFlagsCount, setSkippedFlagsCount] = useState<Record<string, number>>({});
+  const [flagCacheBuster, setFlagCacheBuster] = useState<number>(0);
   const [selectedDuration, setSelectedDuration] = useState(10); // Minutes
   const [timeLeft, setTimeLeft] = useState(600); // Seconds
   const [timeElapsed, setTimeElapsed] = useState(0);
@@ -133,6 +337,25 @@ export default function App() {
   const [isSoundEnabled, setIsSoundEnabled] = useState(false);
   const [showExpandedDetail, setShowExpandedDetail] = useState(false);
   const [selectedExpandedCountryId, setSelectedExpandedCountryId] = useState<string | null>(null);
+  const [selectedAllianceName, setSelectedAllianceName] = useState<string | null>(null);
+  const [expansionPanelTab, setExpansionPanelTab] = useState<'countries' | 'alliances'>('countries');
+  const [isAllianceHighlighted, setIsAllianceHighlighted] = useState(false);
+  const [allianceFlagRefreshKey, setAllianceFlagRefreshKey] = useState(0);
+  const [isAllianceFlagRefreshing, setIsAllianceFlagRefreshing] = useState(false);
+  const [allianceLogoError, setAllianceLogoError] = useState(false);
+
+  useEffect(() => {
+    setIsAllianceHighlighted(false);
+    setIsAllianceFlagRefreshing(false);
+    setAllianceLogoError(false);
+  }, [selectedAllianceName, allianceFlagRefreshKey]);
+
+  const highlightedAllianceMemberIds = useMemo(() => {
+    if (!selectedAllianceName || !isAllianceHighlighted) return null;
+    const alliance = ALLIANCES_DATA.find(a => a.id === selectedAllianceName);
+    if (!alliance) return null;
+    return new Set(COUNTRIES.filter(c => alliance.matches(c)).map(c => String(c.id).padStart(3, '0')));
+  }, [selectedAllianceName, isAllianceHighlighted]);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -142,11 +365,13 @@ export default function App() {
   const [adminFilter, setAdminFilter] = useState('');
   const [selectedContinentFilter, setSelectedContinentFilter] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showFlagHintPanel, setShowFlagHintPanel] = useState(false);
   const [isSatelliteView, setIsSatelliteView] = useState(false);
   const [isGlobeMode, setIsGlobeMode] = useState(false);
   const [isTerritorialPanelCollapsed, setIsTerritorialPanelCollapsed] = useState(false);
   const [isMemoryMode, setIsMemoryMode] = useState(false);
   const [expansionSort, setExpansionSort] = useState<'alphabet' | 'wealth'>('alphabet');
+  const [allianceSort, setAllianceSort] = useState<'alphabet' | 'size'>('size');
   const [isPaused, setIsPaused] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -170,11 +395,15 @@ export default function App() {
         mode: gameMode,
         duration: completionTime || 0,
         limit: gameMode === 'challenge' ? selectedDuration : null,
-        isMemoryMode: isMemoryMode
+        isMemoryMode: isMemoryMode,
+        gameType: gameType,
+        flagCountLimit: gameType === 'flag' ? flagCountLimit : null,
+        flagDuration: gameType === 'flag' ? selectedDuration : null,
+        originalFlagQueue: gameType === 'flag' ? originalFlagQueue : null
       };
     }
     return null;
-  }, [selectedRecordIndex, leaderboard, isFinished, playerName, isGuest, score, guessedIds, gameMode, completionTime, selectedDuration]);
+  }, [selectedRecordIndex, leaderboard, isFinished, playerName, isGuest, score, guessedIds, gameMode, completionTime, selectedDuration, gameType, flagCountLimit, originalFlagQueue]);
 
   useEffect(() => {
     // Auth Listener
@@ -359,7 +588,8 @@ export default function App() {
   useEffect(() => {
     if (hasStarted && startTime && !isFinished && !isPaused) {
       timerRef.current = setInterval(() => {
-        if (gameMode === 'zen') {
+        const isTimed = gameType === 'flag' ? flagGameMode === 'timed' : gameMode === 'challenge';
+        if (!isTimed) {
           setTimeElapsed(prev => prev + 1);
         } else {
           setTimeLeft(prev => {
@@ -377,7 +607,7 @@ export default function App() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [hasStarted, startTime, isFinished, gameMode, isPaused]);
+  }, [hasStarted, startTime, isFinished, gameMode, isPaused, gameType, flagGameMode]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -397,6 +627,14 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'm') {
         e.preventDefault();
         setIsMemoryMode(prev => !prev);
+      }
+
+      // Toggle Flag Hint Panel with Meta/Ctrl + F
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        if (gameType === 'flag') {
+          setShowFlagHintPanel(prev => !prev);
+        }
       }
 
       // Toggle Pause with Alt key (Option) or Command/Ctrl + Pause/F8
@@ -423,6 +661,12 @@ export default function App() {
 
   // Scoring logic
   const getCountryPoints = (country: CountryData) => {
+    if (gameType === 'flag') {
+      // Adjust the score to the selected quantity and time instead of whole globe properties (area)
+      const timeFactor = 10 / Math.max(1, selectedDuration);
+      const quantityFactor = 20 / Math.max(1, flagCountLimit);
+      return Math.max(100, Math.floor(1000 * timeFactor * quantityFactor));
+    }
     // Fixed points based on name length and 'uniqueness' (inverse of area)
     const nameWeight = country.name.length * 150;
     const uniquenessWeight = Math.floor(25000 / Math.pow((country.area + 1), 0.25));
@@ -430,12 +674,14 @@ export default function App() {
   };
 
   const currentMultiplier = useMemo(() => {
-    if (gameMode === 'zen') {
+    const isTimed = gameType === 'flag' ? flagGameMode === 'timed' : gameMode === 'challenge';
+    if (!isTimed) {
       return Math.max(0.1, 1 - (timeElapsed / 3600)); // Depletes over 1 hour
     } else {
-      return (timeLeft / 600) + 0.5; // Bonus for speed in challenge
+      const allowedTime = selectedDuration * 60;
+      return (timeLeft / Math.max(1, allowedTime)) + 0.5; // Bonus for speed scaled to the selected time limit
     }
-  }, [timeElapsed, timeLeft, gameMode]);
+  }, [timeElapsed, timeLeft, gameMode, gameType, flagGameMode, selectedDuration]);
 
   const difficultyMultiplier = isMemoryMode ? 1.5 : 1.0;
 
@@ -445,6 +691,13 @@ export default function App() {
       playTypeSound();
     }
     setInputValue(value);
+
+    if (value.trim() !== '' && !hasStarted && !isFinished && !isPaused) {
+      if (!user && !isGuest) {
+        setIsGuest(true);
+      }
+      startGame();
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -456,8 +709,7 @@ export default function App() {
         if (!user && !isGuest) {
           setIsGuest(true);
         }
-        setHasStarted(true);
-        setStartTime(Date.now());
+        startGame();
       }
 
       if (normalized === 'india') {
@@ -468,6 +720,48 @@ export default function App() {
       if (normalized === 'final submit' || normalized === 'finish') {
         finishGame();
         setInputValue('');
+        return;
+      }
+
+      if (gameType === 'flag' && currentTargetFlagId) {
+        const target = COUNTRIES.find(c => c.id === currentTargetFlagId);
+        if (!target) return;
+        const names = [target.name.toLowerCase(), ...target.aliases.map(a => a.toLowerCase())];
+        
+        if (names.includes(normalized)) {
+          const newGuessed = new Set(guessedIds);
+          if (!newGuessed.has(target.id)) {
+            newGuessed.add(target.id);
+            setGuessedIds(newGuessed);
+            setLastGuessedId(target.id);
+            setMostRecentGuessedId(target.id);
+            
+            const basePoints = getCountryPoints(target);
+            const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+            setScore(prev => prev + points);
+            
+            setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
+            setTimeout(() => setFeedback(null), 1500);
+
+            if (target.code) {
+              setActiveFlag(target.code);
+              setTimeout(() => setActiveFlag(null), 1500);
+            }
+          }
+
+          setInputValue('');
+
+          const nextQueue = flagQueue.slice(1);
+          setFlagQueue(nextQueue);
+          if (nextQueue.length > 0) {
+            setCurrentTargetFlagId(nextQueue[0]);
+          } else {
+            finishGame();
+          }
+        } else {
+           setFeedback({ text: `INCORRECT GUESS`, type: 'error' });
+           setTimeout(() => setFeedback(null), 1000);
+        }
         return;
       }
 
@@ -557,7 +851,11 @@ export default function App() {
       isMemoryMode: isMemoryMode,
       userId: user?.uid || null,
       userEmail: user?.email || null,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      gameType: gameType,
+      flagCountLimit: gameType === 'flag' ? flagCountLimit : null,
+      flagDuration: gameType === 'flag' ? selectedDuration : null,
+      originalFlagQueue: gameType === 'flag' ? originalFlagQueue : null
     };
 
     if (user) {
@@ -684,9 +982,70 @@ export default function App() {
     }
   }, [lastGuessedId]);
 
-  const startGame = () => {
+  const skipFlag = () => {
+    if (gameType !== 'flag' || !currentTargetFlagId || flagQueue.length === 0) return;
+    
+    const targetCountry = COUNTRIES.find(c => c.id === currentTargetFlagId);
+    const newSkipCount = (skippedFlagsCount[currentTargetFlagId] || 0) + 1;
+    
+    if (newSkipCount >= 3) {
+      setFeedback({ text: `PROTOCOL FAILS: ${targetCountry?.name.toUpperCase() || 'UNKNOWN'} SKIPPED THREE TIMES`, type: 'error' });
+      setTimeout(() => setFeedback(null), 2500);
+      finishGame();
+      return;
+    }
+
+    setSkippedFlagsCount(prev => ({ ...prev, [currentTargetFlagId!]: newSkipCount }));
+
+    if (newSkipCount === 2) {
+      const capital = targetCountry?.capital || 'Unknown';
+      setFeedback({ text: `HINT PROTOCOL CRITICAL: CAPITAL: ${capital.toUpperCase()}`, type: 'info' });
+      setTimeout(() => setFeedback(null), 3000);
+    } else {
+      setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''} (${newSkipCount}/2)`, type: 'error' });
+      setTimeout(() => setFeedback(null), 1000);
+    }
+
+    if (flagQueue.length === 1) {
+      if (flagGameMode === 'timed') {
+        setFeedback({ text: `LAST TARGET CYCLING`, type: 'info' });
+        setTimeout(() => setFeedback(null), 1000);
+      } else {
+        if (newSkipCount >= 3) {
+          finishGame();
+        }
+      }
+      return;
+    }
+
+    const nextQueue = [...flagQueue.slice(1), flagQueue[0]];
+    setFlagQueue(nextQueue);
+    setCurrentTargetFlagId(nextQueue[0]);
+  };
+
+  const startGame = (forcedDuration?: number, forcedGameType?: 'typing' | 'flag', forcedFlagCountLimit?: number) => {
     setHasStarted(true);
     setStartTime(Date.now());
+    
+    const duration = forcedDuration !== undefined ? forcedDuration : selectedDuration;
+    setTimeLeft(duration * 60);
+    
+    const activeGameType = forcedGameType || gameType;
+    if (activeGameType === 'flag') {
+      const countryIds = COUNTRIES.map(c => c.id);
+      const shuffled = [...countryIds].sort(() => Math.random() - 0.5);
+      const limit = forcedFlagCountLimit !== undefined ? forcedFlagCountLimit : flagCountLimit;
+      const initialQueue = shuffled.slice(0, Math.min(limit, COUNTRIES.length));
+      setFlagQueue(initialQueue);
+      setOriginalFlagQueue(initialQueue);
+      setCurrentTargetFlagId(initialQueue[0]);
+      setSkippedFlagsCount({});
+    } else {
+      setFlagQueue([]);
+      setOriginalFlagQueue([]);
+      setCurrentTargetFlagId(null);
+      setSkippedFlagsCount({});
+    }
   };
 
   const resetGame = () => {
@@ -695,6 +1054,7 @@ export default function App() {
     setStartTime(null);
     setHasStarted(false);
     setShowRecordsView(false);
+    setShowFlagHintPanel(false);
     setSelectedRecordIndex(null);
     setTimeElapsed(0);
     setTimeLeft(selectedDuration * 60);
@@ -710,6 +1070,10 @@ export default function App() {
     setFeedback(null);
     setPlayerName('');
     setIsPaused(false);
+    setCurrentTargetFlagId(null);
+    setFlagQueue([]);
+    setOriginalFlagQueue([]);
+    setSkippedFlagsCount({});
   };
 
   useEffect(() => {
@@ -825,27 +1189,73 @@ export default function App() {
 
         <div className="flex items-center justify-between lg:justify-end w-full lg:w-auto gap-2 lg:gap-6 shrink-0">
           {!hasStarted && !isFinished && (
-            <div className="flex items-center gap-1.5 lg:gap-3 scale-90 lg:scale-100">
+            <div className="flex flex-wrap items-center gap-1.5 lg:gap-3 scale-90 lg:scale-100">
               <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
                 <button 
-                  onClick={() => setGameMode('zen')}
+                  onClick={() => setGameType('typing')}
+                  title="Type Mode"
                   className={cn(
-                    "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
-                    gameMode === 'zen' ? "bg-emerald-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
+                    "p-1.5 rounded-md transition-all flex items-center justify-center",
+                    gameType === 'typing' ? "bg-cyan-500 text-black shadow-md" : "text-neutral-500 hover:text-neutral-200"
                   )}
                 >
-                  Zen
+                  <Keyboard className="w-3.5 h-3.5" />
                 </button>
                 <button 
-                  onClick={() => setGameMode('challenge')}
+                  onClick={() => {
+                    setShowFlagQuantityPrompt(true);
+                  }}
+                  title="Flag Mode"
                   className={cn(
-                    "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
-                    gameMode === 'challenge' ? "bg-amber-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
+                    "p-1.5 rounded-md transition-all flex items-center justify-center",
+                    gameType === 'flag' ? "bg-rose-500 text-black shadow-md" : "text-neutral-500 hover:text-neutral-200"
                   )}
                 >
-                  Hard
+                  <Flag className="w-3.5 h-3.5" />
                 </button>
               </div>
+
+              {gameType === 'flag' && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[7px] lg:text-[9px] text-neutral-500 font-mono uppercase">Qty:</span>
+                  <select 
+                    value={flagCountLimit}
+                    onChange={(e) => {
+                      const count = Number(e.target.value);
+                      setFlagCountLimit(count);
+                      startGame(selectedDuration, 'flag', count);
+                    }}
+                    className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-emerald-500 outline-hidden"
+                  >
+                    {[5, 10, 20, 50, 100, 195].map(q => (
+                      <option key={q} value={q}>{q} Flags</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {gameType !== 'flag' && (
+                <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
+                  <button 
+                    onClick={() => setGameMode('zen')}
+                    className={cn(
+                      "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
+                      gameMode === 'zen' ? "bg-emerald-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
+                    )}
+                  >
+                    Zen
+                  </button>
+                  <button 
+                    onClick={() => setGameMode('challenge')}
+                    className={cn(
+                      "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
+                      gameMode === 'challenge' ? "bg-amber-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
+                    )}
+                  >
+                    Hard
+                  </button>
+                </div>
+              )}
 
               <button 
                 onClick={() => setIsMemoryMode(!isMemoryMode)}
@@ -860,34 +1270,35 @@ export default function App() {
                 <Brain className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               </button>
 
-              {gameMode === 'challenge' && (
-                <select 
-                  value={selectedDuration}
-                  onChange={(e) => setSelectedDuration(Number(e.target.value))}
-                  className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-amber-500 outline-hidden"
-                >
-                  {[1, 2, 5, 10, 15, 20, 30, 45, 60].map(m => (
-                    <option key={m} value={m}>{m}m</option>
-                  ))}
-                </select>
+              {(gameMode === 'challenge' || gameType === 'flag') && (
+                <div className="flex items-center gap-1">
+                  {gameType === 'flag' && <span className="text-[7px] lg:text-[9px] text-neutral-500 font-mono uppercase">Time:</span>}
+                  <select 
+                    value={selectedDuration}
+                    onChange={(e) => {
+                      const dur = Number(e.target.value);
+                      setSelectedDuration(dur);
+                      if (gameType === 'flag') {
+                        startGame(dur, 'flag', flagCountLimit);
+                      }
+                    }}
+                    className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-amber-500 outline-hidden"
+                  >
+                    {[1, 2, 5, 10, 15, 20, 30, 45, 60].map(m => (
+                      <option key={m} value={m}>{m}m</option>
+                    ))}
+                  </select>
+                </div>
               )}
             </div>
           )}
 
           <div className="flex items-center gap-2 lg:gap-4 ml-auto lg:ml-0">
             <div className="flex flex-col items-end min-w-[40px] lg:min-w-[80px]">
-                <span className="text-[7px] lg:text-[10px] text-neutral-500 font-mono uppercase leading-none">Stats</span>
-                <div className="flex items-center gap-1 text-white font-mono leading-none">
-                  <Globe2 className="w-2.5 h-2.5 lg:w-4 lg:h-4 text-cyan-500" />
-                  <span className="text-[12px] lg:text-lg">{percentageCovered.toFixed(0)}%</span>
-                </div>
-            </div>
-
-            <div className="flex flex-col items-end min-w-[40px] lg:min-w-[80px]">
                 <span className="text-[7px] lg:text-[10px] text-neutral-500 font-mono uppercase leading-none">Time</span>
                 <div className="flex items-center gap-1 text-white font-mono leading-none">
                   <Timer className="w-2.5 h-2.5 lg:w-4 lg:h-4 text-emerald-500" />
-                  <span className="text-[12px] lg:text-lg">{gameMode === 'challenge' ? formatTime(timeLeft) : formatTime(timeElapsed)}</span>
+                  <span className="text-[12px] lg:text-lg">{(gameMode === 'challenge' || (gameType === 'flag' && flagGameMode === 'timed')) ? formatTime(timeLeft) : formatTime(timeElapsed)}</span>
                 </div>
             </div>
               
@@ -985,47 +1396,181 @@ export default function App() {
           "w-full border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 shrink-0 h-[35dvh] lg:h-auto lg:max-h-full z-20 transition-all duration-500",
           isSatelliteView ? "lg:w-64" : "lg:w-80"
         )}>
-          {!isSatelliteView && (
-            <div className="p-2 lg:p-6 space-y-2 lg:space-y-6 shrink-0">
-              <AnimatePresence mode="wait">
-                <motion.div key="search" className="space-y-0.5 lg:space-y-2">
-                  <label className="text-[8px] lg:text-[10px] text-neutral-500 font-mono uppercase tracking-widest hidden lg:block">Identify Global Territory</label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-500" />
-                      <input 
-                        ref={inputRef}
-                        type="text"
-                        value={inputValue}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        disabled={isFinished || isPaused}
-                        placeholder={isPaused ? "MISSION PAUSED" : "Type country name..."}
-                        className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-1.5 lg:py-3 pl-9 lg:pl-10 pr-4 text-xs lg:text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-700"
+           {/* Flag Decryption Unit - Higher Priority Display */}
+           {gameType === 'flag' && currentTargetFlagId && hasStarted && !isFinished && (
+             <div className="p-4 lg:p-5 pb-2 lg:pb-0 space-y-4 lg:space-y-5 shrink-0">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className="p-4 bg-neutral-900/80 backdrop-blur-md border border-emerald-500/30 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.1)] space-y-4"
+                >
+                   <div className="flex justify-between items-center px-1">
+                     <span className="text-[9px] text-emerald-500 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
+                       <Flag className="w-3 h-3" />
+                       Target Identifier
+                     </span>
+                     {flagGameMode === 'count' && (
+                       <span className="text-[9px] text-neutral-500 font-mono">
+                         {guessedIds.size + 1} / {flagCountLimit}
+                       </span>
+                     )}
+                   </div>
+                   <div className="relative aspect-[3/2] flex items-center justify-center bg-black/40 rounded-xl border border-white/5 overflow-hidden group">
+                      <img 
+                         key={`${currentTargetFlagId}-${flagCacheBuster}`}
+                         src={`https://flagcdn.com/w640/${COUNTRIES.find(c => c.id === currentTargetFlagId)?.code.toLowerCase()}.png${flagCacheBuster ? `?t=${flagCacheBuster}` : ''}`} 
+                         alt="Identify this flag"
+                         className="h-full object-contain shadow-2xl transition-transform duration-700 group-hover:scale-110"
                       />
-                    </div>
-                  </div>
-                  <div className="relative h-4">
-                    <AnimatePresence>
-                      {feedback && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: -5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 5 }}
-                          className={cn(
-                            "absolute inset-0 text-center text-[10px] font-bold uppercase tracking-widest",
-                            feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
-                          )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                   </div>
+                   <div className="px-1 flex items-center justify-between">
+                      <span className="text-[8px] text-neutral-600 font-mono uppercase">
+                        {(skippedFlagsCount[currentTargetFlagId || ''] || 0) > 0 
+                          ? `Skips: ${skippedFlagsCount[currentTargetFlagId || '']}/2` 
+                          : 'Status: Pending Verification'}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={() => setFlagCacheBuster(prev => prev + 1)}
+                          className="p-1 px-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-all flex items-center justify-center"
+                          title="Reload flag image (if not displaying)"
                         >
-                          {feedback.text}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                          <RefreshCcw className="w-3 h-3" />
+                        </button>
+                        <button 
+                          onClick={skipFlag}
+                          className={cn(
+                            "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all group",
+                            (skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2
+                              ? "bg-red-950/40 border border-red-500/30 text-rose-400 hover:bg-red-900/40 hover:text-rose-300 animate-pulse"
+                              : "bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white"
+                          )}
+                          title={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2 ? "Warning: Third skip ends the game!" : "Skip this flag"}
+                        >
+                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2 ? "Fatal Skip" : "Skip"}</span>
+                          <Shuffle className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" />
+                        </button>
+                      </div>
+                   </div>
                 </motion.div>
-              </AnimatePresence>
-            </div>
-          )}
+
+                    {currentTargetFlagId && (skippedFlagsCount[currentTargetFlagId] || 0) >= 2 && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="p-3 bg-neutral-900 border border-amber-500/30 rounded-xl space-y-1.5 text-left mb-4"
+                      >
+                        <div className="text-[8.5px] font-mono text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Brain className="w-3.5 h-3.5 animate-pulse text-amber-500" />
+                          Intel Hint (2 Skips Recorded)
+                        </div>
+                        <div className="space-y-1 font-mono text-[9px] text-neutral-300">
+                          {(() => {
+                            const country = COUNTRIES.find(c => c.id === currentTargetFlagId);
+                            return (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-amber-500/70 font-bold text-[8px] shrink-0 uppercase">[CAPITAL]:</span> 
+                                  {country?.capital ? (
+                                    <a 
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(country.capital + ", " + country.name)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-white font-bold hover:text-emerald-400 hover:underline transition-colors inline-flex items-center gap-1 group/hint outline-none"
+                                      title={`Click to view ${country.capital} on Google Maps`}
+                                    >
+                                      <span>{country.capital}</span>
+                                      <ExternalLink className="w-2.5 h-2.5 text-neutral-500 group-hover/hint:text-emerald-400 transition-colors" />
+                                    </a>
+                                  ) : (
+                                    <span className="text-white font-bold">Unknown</span>
+                                  )}
+                                </div>
+                                {country?.facts && country.facts.length > 0 && (
+                                  <div className="leading-relaxed mt-1 flex items-start gap-1 text-neutral-400">
+                                    <span className="text-amber-500/70 font-bold text-[8px] shrink-0 uppercase">[DOSSIER]:</span> 
+                                    {country.facts[0]}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </motion.div>
+                    )}
+
+                {flagQueue.length > 0 && (
+                  <div className="space-y-2 px-1">
+                     <div className="flex justify-between items-center">
+                       <span className="text-[8px] text-neutral-600 font-mono uppercase tracking-widest">Upcoming Decrypts</span>
+                       <span className="text-[8px] text-neutral-700 font-mono">Queue Buffer: {Math.max(0, flagQueue.length - 1)}</span>
+                     </div>
+                     <div className="flex gap-2 items-center overflow-x-auto pb-2 scrollbar-hide">
+                        {flagQueue.slice(1, 6).map((id) => (
+                           <motion.div 
+                             layoutId={id}
+                             key={id} 
+                             className="w-12 aspect-[3/2] shrink-0 rounded-md border border-neutral-800/50 bg-neutral-900/50 grayscale opacity-40 overflow-hidden"
+                           >
+                              <img 
+                                 src={`https://flagcdn.com/w160/${COUNTRIES.find(c => c.id === id)?.code.toLowerCase()}.png`} 
+                                 className="w-full h-full object-cover"
+                                 alt="upcoming"
+                              />
+                           </motion.div>
+                        ))}
+                     </div>
+                  </div>
+                )}
+             </div>
+           )}
+
+          <div className="p-4 lg:p-6 space-y-4 lg:space-y-6 shrink-0">
+             {!isSatelliteView && (
+               <AnimatePresence mode="wait">
+                 <motion.div key="search" className="space-y-0.5 lg:space-y-2">
+                   <label className="text-[8px] lg:text-[10px] text-neutral-500 font-mono uppercase tracking-widest hidden lg:block">
+                     {gameType === 'flag' ? 'Confirm Identity' : 'Identify Global Territory'}
+                   </label>
+                   <div className="flex gap-2">
+                     <div className="relative flex-1">
+                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-500" />
+                       <input 
+                         ref={inputRef}
+                         type="text"
+                         value={inputValue}
+                         onChange={handleInputChange}
+                         onKeyDown={handleKeyDown}
+                         disabled={isFinished || isPaused}
+                         placeholder={isPaused ? "MISSION PAUSED" : !hasStarted ? (gameType === 'flag' ? "Type to begin Flag Decryption..." : "Type to begin Territory Identification...") : "Type country name..."}
+                         className="w-full bg-neutral-900 border border-neutral-800 rounded-lg py-1.5 lg:py-3 pl-9 lg:pl-10 pr-4 text-xs lg:text-sm focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all placeholder:text-neutral-700"
+                       />
+                     </div>
+                   </div>
+                   <div className="relative h-4">
+                     <AnimatePresence>
+                       {feedback && (
+                         <motion.div 
+                           initial={{ opacity: 0, y: -5 }}
+                           animate={{ opacity: 1, y: 0 }}
+                           exit={{ opacity: 0, y: 5 }}
+                           className={cn(
+                             "absolute inset-0 text-center text-[10px] font-bold uppercase tracking-widest",
+                             feedback.type === 'success' ? 'text-emerald-500' : 'text-red-500'
+                           )}
+                         >
+                           {feedback.text}
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
+                   </div>
+                 </motion.div>
+               </AnimatePresence>
+             )}
+          </div>
+
 
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="hidden lg:block px-6 pb-6 space-y-4">
@@ -1033,31 +1578,53 @@ export default function App() {
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-neutral-500 font-mono uppercase tracking-widest">Landmass Coverage</span>
-                      <span className="font-mono text-emerald-500">{guessedIds.size === COUNTRIES.length ? '100' : Math.min(99.99, percentageCovered).toFixed(2)}%</span>
+                      <span className="text-neutral-500 font-mono uppercase tracking-widest">
+                        {gameType === 'flag' ? 'Flag Accuracy' : 'Landmass Coverage'}
+                      </span>
+                      <span className="font-mono text-emerald-500">
+                        {gameType === 'flag' 
+                          ? `${((guessedIds.size / flagCountLimit) * 100).toFixed(1)}%` 
+                          : `${guessedIds.size === COUNTRIES.length ? '100' : Math.min(99.99, percentageCovered).toFixed(2)}%`}
+                      </span>
                     </div>
                     <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
                       <motion.div 
                         initial={{ width: 0 }}
-                        animate={{ width: `${percentageCovered}%` }}
+                        animate={{ width: `${gameType === 'flag' ? (guessedIds.size / flagCountLimit) * 100 : percentageCovered}%` }}
                         className="h-full bg-emerald-500"
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-yellow-500/70 font-mono uppercase tracking-widest">Wealth Retrieval</span>
-                      <span className="font-mono text-yellow-500">{guessedIds.size === COUNTRIES.length ? '100' : percentageWealthCovered.toFixed(2)}%</span>
+                  {gameType === 'flag' ? (
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-cyan-500/70 font-mono uppercase tracking-widest">Surveillance Sync</span>
+                        <span className="font-mono text-cyan-400">{guessedIds.size} / {flagCountLimit}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, (guessedIds.size / flagCountLimit) * 100)}%` }}
+                          className="h-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.3)]"
+                        />
+                      </div>
                     </div>
-                    <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${percentageWealthCovered}%` }}
-                        className="h-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.3)]"
-                      />
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[10px]">
+                        <span className="text-yellow-500/70 font-mono uppercase tracking-widest">Wealth Retrieval</span>
+                        <span className="font-mono text-yellow-500">{guessedIds.size === COUNTRIES.length ? '100' : percentageWealthCovered.toFixed(2)}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${percentageWealthCovered}%` }}
+                          className="h-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.3)]"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -1066,7 +1633,7 @@ export default function App() {
                   <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
                     <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Guessed</span>
                     <span className="text-xl font-bold">
-                      {guessedIds.size} <span className="text-[9px] font-normal text-neutral-600">/ {COUNTRIES.length}</span>
+                      {guessedIds.size} <span className="text-[9px] font-normal text-neutral-600">/ {gameType === 'flag' ? flagCountLimit : COUNTRIES.length}</span>
                     </span>
                   </div>
                   <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
@@ -1160,14 +1727,14 @@ export default function App() {
                       onChange={handleInputChange}
                       onKeyDown={handleKeyDown}
                       disabled={isPaused}
-                      placeholder={isPaused ? "MISSION PAUSED" : "Type country name..."}
+                      placeholder={isPaused ? "MISSION PAUSED" : !hasStarted ? (gameType === 'flag' ? "Press START to identify flag" : "Press ENTER to start mapping") : "Type country name..."}
                       className="w-full bg-black/50 border border-neutral-800 rounded-lg py-2 pl-9 pr-4 text-xs focus:outline-hidden focus:ring-1 focus:ring-emerald-500/50 transition-all font-semibold placeholder:text-neutral-700"
                     />
                   </div>
                   <div className="flex gap-2">
                     <div className="px-3 py-1.5 bg-black/50 border border-neutral-800 rounded-lg flex flex-col justify-center min-w-[70px]">
                       <span className="text-[7px] text-neutral-500 uppercase font-mono tracking-widest leading-none mb-1">Guessed</span>
-                      <span className="text-[11px] font-bold text-white leading-none">{guessedIds.size} / {COUNTRIES.length}</span>
+                      <span className="text-[11px] font-bold text-white leading-none">{guessedIds.size} / {gameType === 'flag' ? flagCountLimit : COUNTRIES.length}</span>
                     </div>
                     <div className="px-3 py-1.5 bg-black/50 border border-neutral-800 rounded-lg flex flex-col justify-center min-w-[70px]">
                       <span className="text-[7px] text-emerald-500/70 uppercase font-mono tracking-widest leading-none mb-1">Multiplier</span>
@@ -1208,12 +1775,73 @@ export default function App() {
           {/* Mobile Guessed Button */}
           <div className="lg:hidden absolute bottom-4 left-4 z-40">
              <button 
-                onClick={() => setFeedback({ text: `IDENTIFIED: ${guessedIds.size} / ${COUNTRIES.length}`, type: 'info' })}
+                onClick={() => setFeedback({ text: `IDENTIFIED: ${guessedIds.size} / ${gameType === 'flag' ? flagCountLimit : COUNTRIES.length}`, type: 'info' })}
                 className="w-10 h-10 bg-[#121212]/90 backdrop-blur-md border border-neutral-800 rounded-full flex items-center justify-center text-emerald-500 shadow-2xl"
              >
                 <CheckCircle2 className="w-5 h-5" />
              </button>
           </div>
+
+          <AnimatePresence>
+            {showFlagHintPanel && gameType === 'flag' && !isFinished && (
+              <motion.div
+                initial={{ x: 300, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 300, opacity: 0 }}
+                className="absolute right-6 top-6 bottom-6 w-72 bg-[#121212]/95 backdrop-blur-xl border border-emerald-500/30 rounded-3xl p-5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col z-50 overflow-hidden"
+              >
+                <div className="flex items-center justify-between mb-5 shrink-0">
+                  <div className="flex flex-col">
+                    <h3 className="text-md font-black text-white uppercase tracking-tighter italic flex items-center gap-2">
+                       <Shuffle className="w-4 h-4 text-emerald-500" />
+                       Flag Database
+                    </h3>
+                    <span className="text-[9px] text-emerald-500/60 font-mono font-bold tracking-widest uppercase">Decryption Assistance</span>
+                  </div>
+                  <button 
+                    onClick={() => setShowFlagHintPanel(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-500 hover:text-white transition-colors"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {COUNTRIES.filter(c => !guessedIds.has(c.id)).sort((a,b) => a.name.localeCompare(b.name)).map(country => (
+                      <button
+                        key={country.id}
+                        onClick={() => {
+                          setInputValue(country.name);
+                          inputRef.current?.focus();
+                        }}
+                        className="group relative aspect-[3/2] rounded-xl overflow-hidden border border-white/5 bg-neutral-900 hover:border-emerald-500/50 transition-all active:scale-95"
+                      >
+                        <img 
+                          src={`https://flagcdn.com/w160/${country.code.toLowerCase()}.png`}
+                          className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                          alt={country.name}
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-black/80 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <p className="text-[7.5px] font-bold text-white uppercase truncate text-center">{country.name}</p>
+                        </div>
+                        {isMemoryMode && (
+                          <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  {COUNTRIES.filter(c => !guessedIds.has(c.id)).length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center opacity-30 text-center py-20">
+                      <Target className="w-10 h-10 mb-4" />
+                      <p className="text-[10px] font-mono uppercase">All identities decrypted</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <AnimatePresence mode="wait">
             {showRecordsView ? (
               <motion.div 
@@ -1543,6 +2171,7 @@ export default function App() {
                   projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                   isMemoryMode={isMemoryMode}
                   isPaused={isPaused}
+                  highlightedAllianceMemberIds={highlightedAllianceMemberIds}
                 />
               
                 {/* Interactive Overlays */}
@@ -1699,14 +2328,30 @@ export default function App() {
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="p-6 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-1 text-center font-mono">
-                      <span className="text-[10px] text-neutral-500 uppercase block">Mass Clear</span>
-                      <div className="text-2xl font-black text-emerald-400 leading-none">{percentageCovered.toFixed(1)}%</div>
-                      <span className="text-[10px] text-neutral-600 uppercase">Territory</span>
+                      <span className="text-[10px] text-neutral-500 uppercase block">
+                        {gameType === 'flag' ? "Flag Accuracy" : "Mass Clear"}
+                      </span>
+                      <div className="text-2xl font-black text-emerald-400 leading-none">
+                        {gameType === 'flag' 
+                          ? `${((guessedIds.size / flagCountLimit) * 100).toFixed(1)}%` 
+                          : `${percentageCovered.toFixed(1)}%`}
+                      </div>
+                      <span className="text-[10px] text-neutral-600 uppercase">
+                        {gameType === 'flag' ? "Decrypted" : "Territory"}
+                      </span>
                     </div>
                     <div className="p-6 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-1 text-center font-mono">
-                      <span className="text-[10px] text-neutral-500 uppercase block">Wealth Secured</span>
-                      <div className="text-2xl font-black text-amber-500 leading-none">{percentageWealthCovered.toFixed(1)}%</div>
-                      <span className="text-[10px] text-neutral-600 uppercase">Global GDP</span>
+                      <span className="text-[10px] text-neutral-500 uppercase block">
+                        {gameType === 'flag' ? "Flags Solved" : "Wealth Secured"}
+                      </span>
+                      <div className="text-2xl font-black text-amber-500 leading-none">
+                        {gameType === 'flag' 
+                          ? `${guessedIds.size} / ${flagCountLimit}` 
+                          : `${percentageWealthCovered.toFixed(1)}%`}
+                      </div>
+                      <span className="text-[10px] text-neutral-600 uppercase">
+                        {gameType === 'flag' ? "Quantity Target" : "Global GDP"}
+                      </span>
                     </div>
                     <div className="p-6 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-1 text-center font-mono">
                       <span className="text-[10px] text-neutral-500 uppercase block">Protocol Time</span>
@@ -2110,11 +2755,19 @@ export default function App() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-500">[CMD / CTRL] + [X]</span>
-                        <span className="text-emerald-500/80">Toggle Satellite</span>
+                        <span className="text-emerald-500/80">Toggle Satellite View</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">[CMD / CTRL] + [F]</span>
+                        <span className="text-emerald-500/80">Toggle Flag Database</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-500">[CMD / CTRL] + [G]</span>
-                        <span className="text-emerald-500/80">Toggle Globe</span>
+                        <span className="text-emerald-500/80">Toggle Globe View</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500">[CMD / CTRL] + [B]</span>
+                        <span className="text-emerald-500/80">Toggle Rotation</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-500">[ALT] or [CMD] + [F8]</span>
@@ -2171,7 +2824,7 @@ export default function App() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-500 border border-emerald-500/30">
-                    <BarChart3 className="w-5 h-5" />
+                    <Flag className="w-5 h-5" />
                   </div>
                   <button 
                     onClick={() => setIsGlobeMode(!isGlobeMode)}
@@ -2190,7 +2843,12 @@ export default function App() {
                     <p className="text-[9px] text-neutral-500 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
                        Agent: <span className="text-emerald-500">{viewingRecord.name}</span> 
                        <span className="opacity-30">•</span> 
-                       Efficiency: <span className="text-emerald-500">{viewingRecord.guessedIds?.length === COUNTRIES.length ? '100' : Math.min(99, Math.round(((viewingRecord.guessedIds?.length || 0) / COUNTRIES.length) * 100))}%</span>
+                       Efficiency: <span className="text-emerald-500">
+                         {viewingRecord.gameType === 'flag' 
+                           ? `${Math.round(((viewingRecord.guessedIds?.length || 0) / (viewingRecord.flagCountLimit || 20)) * 100)}%`
+                           : `${viewingRecord.guessedIds?.length === COUNTRIES.length ? '100' : Math.min(99, Math.round(((viewingRecord.guessedIds?.length || 0) / COUNTRIES.length) * 100))}%`
+                         }
+                       </span>
                        {viewingRecord.isMemoryMode && (
                          <>
                            <span className="opacity-30">•</span>
@@ -2207,6 +2865,8 @@ export default function App() {
                   onClick={() => {
                     setShowExpandedDetail(false);
                     setSelectedExpandedCountryId(null);
+                    setSelectedAllianceName(null);
+                    setExpansionPanelTab('countries');
                   }}
                   className="w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-500 hover:text-white transition-colors"
                 >
@@ -2226,6 +2886,7 @@ export default function App() {
                       projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                       isMemoryMode={false}
                       isPaused={false}
+                      highlightedAllianceMemberIds={highlightedAllianceMemberIds}
                     />
 
                     <button 
@@ -2240,25 +2901,501 @@ export default function App() {
                     >
                       <ChevronRight className={cn("w-5 h-5 transition-transform duration-300", isTerritorialPanelCollapsed ? "rotate-180" : "rotate-0")} />
                     </button>
+
+                    {/* Sliding Left Alliance Panel */}
+                    <AnimatePresence>
+                      {selectedAllianceName && (() => {
+                        const alliance = ALLIANCES_DATA.find(a => a.id === selectedAllianceName);
+                        if (!alliance) return null;
+                        const members = COUNTRIES.filter(c => alliance.matches(c));
+                        
+                        // Calculate rich alliance statistics
+                        const totalAllianceGdp = members.reduce((sum, c) => sum + (c.gdp || 0), 0);
+                        const totalAllianceArea = members.reduce((sum, c) => sum + (c.area || 0), 0);
+                        
+                        const gdpShare = totalPossibleGdp > 0 ? (totalAllianceGdp / totalPossibleGdp) * 100 : 0;
+                        const areaShare = totalPossibleArea > 0 ? (totalAllianceArea / totalPossibleArea) * 100 : 0;
+                        
+                        const surveyedMembers = members.filter(m => viewingRecord.guessedIds?.includes(m.id)).length;
+                        const surveyedPercent = members.length > 0 ? (surveyedMembers / members.length) * 100 : 0;
+
+                        return (
+                          <motion.div
+                            key={`alliance-left-panel-${selectedAllianceName}`}
+                            initial={{ x: -350, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: -350, opacity: 0 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="absolute left-6 top-6 bottom-6 w-80 lg:w-[325px] p-5 bg-[#0f0f11]/95 backdrop-blur-md border border-neutral-800 rounded-2xl shadow-2xl z-25 flex flex-col justify-between overflow-hidden border-emerald-500/20 cursor-pointer"
+                            onClick={() => setSelectedAllianceName(null)}
+                            title="Click anywhere on background or cards to collapse"
+                          >
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAllianceName(null);
+                              }}
+                              className="absolute top-4 right-4 text-neutral-500 hover:text-white transition-colors z-30 p-1 rounded-md hover:bg-neutral-800/40 cursor-pointer"
+                              title="Close Alliance Panel"
+                            >
+                              <XCircle className="w-5 h-5" />
+                            </button>
+
+                            <div 
+                              className="flex-1 flex flex-col h-full overflow-hidden cursor-pointer"
+                            >
+                              {/* Header & Insignia */}
+                              <div 
+                                className="text-left mb-3 shrink-0 cursor-pointer select-none group/hdr"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedAllianceName(null);
+                                }}
+                                title="Click to collapse alliance profile"
+                              >
+                                <span className="text-[9px] text-emerald-400 group-hover/hdr:text-rose-400 font-mono uppercase tracking-[0.2em] transition-colors">[ CLICK TO COLLAPSE ]</span>
+                                <h3 className="text-lg font-black text-white uppercase tracking-tighter mt-1 group-hover/hdr:text-neutral-300 transition-colors">{alliance.fullName}</h3>
+                                <p className="text-[10px] text-neutral-400 font-mono">CODE: SEC-ALLIANCE-{alliance.id}</p>
+                              </div>
+
+                              {/* Flag / Emblem Container */}
+                              <div 
+                                className="w-full h-24 bg-neutral-900/60 border border-neutral-800 rounded-xl flex items-center justify-center mb-3 shrink-0 overflow-hidden relative cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedAllianceName(null);
+                                }}
+                                title="Click to collapse alliance profile"
+                              >
+                                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.08),transparent_70%)] animate-pulse" />
+                                {allianceLogoError ? (
+                                  <div className="flex flex-col items-center justify-center gap-1 relative z-10 animate-fade-in text-center p-3 select-none">
+                                    <div className="w-11 h-11 bg-blue-950/80 border border-blue-500/40 text-blue-300 rounded-full flex items-center justify-center font-mono font-black text-sm shadow-[0_0_15px_rgba(59,130,246,0.25)] uppercase">
+                                      {alliance.name}
+                                    </div>
+                                    <span className="text-[7.5px] text-neutral-500 font-mono font-bold tracking-widest uppercase mt-1">EMBLEM UNRETRIEVABLE</span>
+                                  </div>
+                                ) : (
+                                  <img 
+                                    key={allianceFlagRefreshKey}
+                                    src={`${alliance.logoUrl}?t=${allianceFlagRefreshKey}`} 
+                                    onError={() => setAllianceLogoError(true)}
+                                    className={cn(
+                                      "h-14 w-auto rounded border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.5)] object-contain relative z-10 transition-all duration-300",
+                                      isAllianceFlagRefreshing ? "opacity-30 scale-95 rotate-3" : "animate-fade-in"
+                                    )} 
+                                    alt={alliance.fullName} 
+                                    referrerPolicy="no-referrer"
+                                  />
+                                )}
+                              </div>
+
+                              {/* Scrollable Intel Feed Container - Logo is fixed, everything below scrolls together */}
+                              <div className="flex-1 overflow-y-auto space-y-3.5 pr-1.5 min-h-0 custom-scrollbar">
+                                {/* Member Country Flags Carousel/List - "alliance card, i need to see country flags" */}
+                                <div 
+                                  className="flex flex-col bg-neutral-950/60 border border-neutral-900 rounded-xl p-2.5"
+                                  onClick={(e) => e.stopPropagation()} // Stop bubble up so scroll/clicks on flags won't collapse
+                                >
+                                  <span className="text-[8px] text-neutral-500 font-mono uppercase tracking-wider mb-1.5 flex items-center gap-1 select-none">
+                                    <Flag className="w-2.5 h-2.5 text-blue-400" />
+                                    Member Flags ({members.length})
+                                  </span>
+                                  <div className="flex items-center gap-2 overflow-x-auto py-1.5 pb-2.5 px-1 bg-neutral-900/40 rounded-lg custom-scrollbar">
+                                    {members.map((m) => (
+                                      <img 
+                                        key={`panel-mini-flag-${m.id}`}
+                                        src={`https://flagcdn.com/w40/${m.code.toLowerCase()}.png`} 
+                                        className={cn(
+                                          "h-5 w-8 rounded border shrink-0 object-cover hover:scale-115 hover:border-blue-400 transition-all cursor-pointer shadow-sm",
+                                          m.id === selectedExpandedCountryId ? "border-blue-500 ring-1 ring-blue-500/40" : "border-white/10"
+                                        )} 
+                                        title={`Sector: ${m.name}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedExpandedCountryId(m.id);
+                                        }}
+                                        alt="" 
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Tactical Actions for Alliance Card */}
+                                <div className="flex gap-2">
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsAllianceFlagRefreshing(true);
+                                      setAllianceFlagRefreshKey(prev => prev + 1);
+                                      setTimeout(() => {
+                                        setIsAllianceFlagRefreshing(false);
+                                      }, 600);
+                                    }}
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-2 bg-neutral-900/95 hover:bg-[#1a1a1e] border border-neutral-800/80 active:border-neutral-700 rounded-lg text-[9.5px] font-mono text-neutral-400 hover:text-white transition-all active:scale-95 duration-200 cursor-pointer h-8 shadow-md"
+                                    title="Force refresh diplomatic alliance logo from secure records"
+                                  >
+                                    <RefreshCcw className={cn("w-3 h-3 transition-transform", isAllianceFlagRefreshing && "animate-spin text-emerald-400")} />
+                                    <span>REFRESH LOGO</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setIsAllianceHighlighted(prev => !prev);
+                                    }}
+                                    className={cn(
+                                      "flex-1 flex items-center justify-center gap-1.5 px-2 border rounded-lg text-[9.5px] font-mono transition-all active:scale-95 duration-200 cursor-pointer h-8 shadow-md",
+                                      isAllianceHighlighted 
+                                        ? "bg-blue-500/25 text-blue-300 border-blue-500/60 shadow-[0_0_12px_rgba(59,130,246,0.3)] font-bold" 
+                                        : "bg-neutral-900/90 border-neutral-800/80 text-neutral-400 hover:text-white hover:bg-[#1a1a1e]"
+                                    )}
+                                    title="Illuminate and plot all alliance territories on the tactical feed"
+                                  >
+                                    <Globe className={cn("w-3 h-3", isAllianceHighlighted && "animate-pulse text-blue-400")} />
+                                    <span>{isAllianceHighlighted ? "PLOTTED" : "SHOW MEMBERS"}</span>
+                                  </button>
+                                </div>
+
+                                {/* Briefing Text */}
+                                <div className="p-2.5 bg-neutral-900/40 border border-neutral-800/60 rounded-xl">
+                                  <p className="text-[10px] font-medium leading-normal italic text-neutral-400">
+                                    {alliance.description || "No official diplomatic intelligence briefing is presently on file for this diplomatic division."}
+                                  </p>
+                                </div>
+
+                                {/* Alliance Economic & Intelligence Statistics */}
+                                <div 
+                                  className="grid grid-cols-2 gap-2"
+                                  onClick={(e) => e.stopPropagation()} // Stop propagation here so clicks on stats don't close panel
+                                >
+                                  <div className="p-2 bg-neutral-900/50 border border-neutral-800/65 rounded-xl text-left">
+                                    <span className="text-[7.5px] text-neutral-500 font-mono uppercase tracking-wider block">Combined GDP</span>
+                                    <span className="text-[11.5px] font-black text-emerald-400 font-mono">
+                                      {totalAllianceGdp >= 1000000 
+                                        ? `$${(totalAllianceGdp / 1000000).toFixed(2)}T` 
+                                        : `$${(totalAllianceGdp / 1000).toFixed(1)}B`}
+                                    </span>
+                                    <span className="text-[8px] text-neutral-400 font-mono block mt-0.5">
+                                      {gdpShare.toFixed(1)}% of Global GDP
+                                    </span>
+                                  </div>
+
+                                  <div className="p-2 bg-neutral-900/50 border border-neutral-800/65 rounded-xl text-left">
+                                    <span className="text-[7.5px] text-neutral-500 font-mono uppercase tracking-wider block">Territorial Area</span>
+                                    <span className="text-[11px] font-black text-slate-300 font-mono">
+                                      {totalAllianceArea >= 1000000 
+                                        ? `${(totalAllianceArea / 1000000).toFixed(1)}M km²` 
+                                        : `${Math.round(totalAllianceArea).toLocaleString()} km²`}
+                                    </span>
+                                    <span className="text-[8px] text-neutral-400 font-mono block mt-0.5">
+                                      {areaShare.toFixed(1)}% of Land Area
+                                    </span>
+                                  </div>
+
+                                  <div className="p-2 col-span-2 bg-neutral-900/30 border border-neutral-800/40 rounded-xl text-left flex items-center justify-between">
+                                    <div>
+                                      <span className="text-[7.5px] text-neutral-500 font-mono uppercase tracking-wider block">Union Survey Status</span>
+                                      <span className="text-[10px] font-bold text-white font-mono mt-0.5 block">
+                                        {surveyedMembers} of {members.length} Sectors
+                                      </span>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-[12px] font-black font-mono text-emerald-400 block pb-0.5">
+                                        {surveyedPercent.toFixed(0)}%
+                                      </span>
+                                      <div className="w-20 h-1 bg-neutral-800 rounded-full overflow-hidden shrink-0 mt-0.5">
+                                        <div 
+                                          className="h-full bg-emerald-500 rounded-full" 
+                                          style={{ width: `${surveyedPercent}%` }} 
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Member Countries List Header */}
+                                <div className="flex justify-between items-center pb-1.5 border-b border-white/5 pt-1">
+                                  <span className="text-[9px] text-neutral-500 font-mono uppercase tracking-wider">Member Sectors ({members.length})</span>
+                                  <span className="text-[8px] text-emerald-400 font-mono uppercase font-bold">Survey Status</span>
+                                </div>
+
+                                {/* Members Stack (no nested scrollbar, scrolls smoothly inside parent container) */}
+                                <div className="space-y-1.5">
+                                  {members.map((m) => {
+                                    const isMGuessed = viewingRecord.guessedIds?.includes(m.id);
+                                    const isCurrent = m.id === selectedExpandedCountryId;
+                                    return (
+                                      <div 
+                                        key={m.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' || e.key === ' ') {
+                                            setSelectedExpandedCountryId(m.id);
+                                          }
+                                        }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedExpandedCountryId(m.id);
+                                        }}
+                                        className={cn(
+                                          "w-full flex items-center justify-between p-2 rounded-lg border text-left cursor-pointer transition-all outline-none",
+                                          isCurrent 
+                                            ? "bg-emerald-500/15 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.1)] font-bold scale-[1.01]" 
+                                            : "bg-neutral-950/50 border-neutral-800/40 hover:bg-neutral-900/50 hover:border-neutral-700/60"
+                                        )}
+                                      >
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <img 
+                                            src={`https://flagcdn.com/w40/${m.code.toLowerCase()}.png`} 
+                                            className="h-4.5 w-7 rounded-sm border border-white/5 shrink-0 object-cover" 
+                                            alt="" 
+                                          />
+                                          <div className="min-w-0">
+                                            <p className="text-[11px] font-bold text-white uppercase truncate leading-none">{m.name}</p>
+                                            {m.capital ? (
+                                              <a
+                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.capital + ", " + m.name)}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-[8px] text-neutral-500 hover:text-emerald-400 font-mono uppercase leading-none mt-1.5 inline-flex items-center gap-1 transition-colors group/cap"
+                                                title={`Click to view ${m.capital} on Google Maps`}
+                                              >
+                                                <span>{m.capital}</span>
+                                                <ExternalLink className="w-2 h-2 text-neutral-600 group-hover/cap:text-emerald-400 transition-colors" />
+                                              </a>
+                                            ) : (
+                                              <p className="text-[8px] text-neutral-500 font-mono uppercase leading-none mt-1">Classified</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="shrink-0 flex items-center">
+                                          {isMGuessed ? (
+                                            <span className="text-[8px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded uppercase font-bold">Surveyed</span>
+                                          ) : (
+                                            <span className="text-[8px] font-mono bg-red-950/40 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded uppercase font-bold">Unmapped</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })()}
+                    </AnimatePresence>
                     
                     <AnimatePresence>
                       {selectedExpandedCountryId && (
                         <motion.div
-                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                          key={`expanded-country-${selectedExpandedCountryId}-${isTerritorialPanelCollapsed}`}
+                          initial={isTerritorialPanelCollapsed ? { opacity: 0, x: 50, scale: 0.95 } : { opacity: 0, y: 20, scale: 0.95 }}
+                          animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                          exit={isTerritorialPanelCollapsed ? { opacity: 0, x: 50, scale: 0.95 } : { opacity: 0, y: 20, scale: 0.95 }}
                           onClick={() => setSelectedExpandedCountryId(null)}
-                          className="absolute bottom-6 left-6 right-6 p-6 bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-2xl shadow-2xl z-20 cursor-pointer hover:bg-neutral-900 transition-colors group/card"
+                          className={cn(
+                            "absolute bg-[#0f0f11]/95 backdrop-blur-md border border-neutral-800 rounded-2xl shadow-2xl z-20 transition-all group/card cursor-pointer hover:bg-neutral-900/40",
+                            isTerritorialPanelCollapsed
+                              ? "right-16 top-6 bottom-6 w-80 lg:w-[380px] p-6 flex flex-col justify-between overflow-y-auto border-emerald-500/20"
+                              : "bottom-6 left-6 right-6 p-6"
+                          )}
                         >
-                          <div className="absolute top-4 right-4 opacity-0 group-hover/card:opacity-100 transition-opacity">
-                            <XCircle className="w-4 h-4 text-neutral-500" />
-                          </div>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedExpandedCountryId(null);
+                            }}
+                            className={cn(
+                              "absolute text-neutral-500 hover:text-white transition-colors z-30 p-1 rounded-md hover:bg-neutral-800/40",
+                              isTerritorialPanelCollapsed ? "top-5 right-5" : "top-4 right-4 opacity-0 group-hover/card:opacity-100"
+                            )}
+                            title="Close info panel"
+                          >
+                            <XCircle className="w-5 h-5" />
+                          </button>
+                          
                           {(() => {
                             const country = COUNTRIES.find(c => c.id === selectedExpandedCountryId);
                             if (!country) return null;
                             const isGuessed = viewingRecord.guessedIds?.includes(country.id);
+                            
+                            // Highly informative derived metrics
+                            const continentCountries = COUNTRIES.filter(c => c.continent === country.continent);
+                            const areaRank = [...continentCountries].sort((a,b) => b.area - a.area).findIndex(c => c.id === country.id) + 1;
+                            const gdpRank = [...continentCountries].sort((a,b) => b.gdp - a.gdp).findIndex(c => c.id === country.id) + 1;
+                            
+                            const landShare = (country.area / totalPossibleArea) * 100;
+                            const gdpShare = ((country.gdp || 0) / totalPossibleGdp) * 100;
+
+                            const econDensity = country.area > 0 ? (country.gdp * 1000000) / country.area : 0;
+
+                            let econClass = "PROVINCIAL ECONOMY";
+                            if (country.gdp > 1000000) econClass = "CLASS I (HYPER)";
+                            else if (country.gdp > 200000) econClass = "CLASS II (MAJOR)";
+                            else if (country.gdp > 50000) econClass = "CLASS III (ESTABLISHED)";
+
+                            const alliancesList = ALLIANCES_DATA.filter(a => a.matches(country));
+
+                            if (isTerritorialPanelCollapsed) {
+                              return (
+                                <div className="flex flex-col h-full justify-between gap-4 text-left">
+                                  <div className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className={cn("w-1 h-8 rounded-full shrink-0", isGuessed ? "bg-emerald-500" : "bg-red-500")} />
+                                      <div className="flex items-center gap-3">
+                                        <img 
+                                          src={`https://flagcdn.com/w80/${country.code.toLowerCase()}.png`} 
+                                          className="h-8 w-auto rounded border border-white/10 shadow-lg"
+                                          alt="" 
+                                        />
+                                        <div>
+                                          <a
+                                            href={`https://en.wikipedia.org/wiki/${encodeURIComponent(country.name)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="inline-flex items-center gap-1.5 group/wiki text-white hover:text-emerald-400 transition-colors outline-none"
+                                            title={`Learn more about ${country.name} on Wikipedia`}
+                                          >
+                                            <h3 className="text-xl font-black uppercase tracking-tighter leading-none group-hover/wiki:underline">
+                                              {country.name}
+                                            </h3>
+                                            <ExternalLink className="w-3.5 h-3.5 text-neutral-600 group-hover/wiki:text-emerald-400 transition-colors shrink-0" />
+                                          </a>
+                                          <p className="text-[9px] text-neutral-500 font-mono uppercase tracking-[0.2em] mt-1.5">{country.continent} Sector</p>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Telemetry Fact Grid */}
+                                    <div className="grid grid-cols-2 gap-2 pt-4 border-t border-white/5 font-mono">
+                                      <a
+                                        href={country.capital ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(country.capital + ", " + country.name)}` : undefined}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className={cn(
+                                          "p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5 text-left block transition-colors",
+                                          country.capital ? "hover:bg-emerald-500/10 hover:border-emerald-500/30 group/capital cursor-pointer" : ""
+                                        )}
+                                      >
+                                        <p className="text-[8px] text-neutral-500 uppercase tracking-wider leading-none flex items-center justify-between">
+                                          <span>Capital City</span>
+                                          {country.capital && <ExternalLink className="w-2 h-2 text-neutral-400 group-hover/capital:text-emerald-400 transition-colors" />}
+                                        </p>
+                                        <p className="text-[11px] font-bold text-white uppercase truncate group-hover/capital:text-emerald-400 transition-colors">{country.capital || "Classified"}</p>
+                                      </a>
+                                      
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5">
+                                        <p className="text-[8px] text-neutral-500 uppercase tracking-wider leading-none">Coordinates</p>
+                                        <p className="text-[10px] font-bold text-neutral-400 uppercase truncate">
+                                          {country.capitalCoords 
+                                            ? `${Math.abs(country.capitalCoords.lat).toFixed(1)}°${country.capitalCoords.lat >= 0 ? "N" : "S"} ${Math.abs(country.capitalCoords.lng).toFixed(1)}°${country.capitalCoords.lng >= 0 ? "E" : "W"}` 
+                                            : "Classified"}
+                                        </p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5">
+                                        <p className="text-[8px] text-neutral-500 uppercase tracking-wider leading-none">Economic Output</p>
+                                        <p className="text-[11px] font-bold text-emerald-500 uppercase">${(country.gdp / 1000).toFixed(1)}B</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5">
+                                        <p className="text-[8px] text-neutral-500 uppercase tracking-wider leading-none">Global Share</p>
+                                        <p className="text-[10px] font-bold text-emerald-600 uppercase">{gdpShare.toFixed(3)}%</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5">
+                                        <p className="text-[8px] text-neutral-500 uppercase tracking-wider leading-none">Total Area</p>
+                                        <p className="text-[11px] font-bold text-white uppercase truncate">{country.area.toLocaleString()} KM²</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5">
+                                        <p className="text-[8px] text-neutral-500 uppercase tracking-wider leading-none">Global Share</p>
+                                        <p className="text-[10px] font-bold text-neutral-400 uppercase">{landShare.toFixed(3)}%</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5 col-span-2">
+                                        <p className="text-[8px] text-neutral-500 uppercase tracking-wider leading-none">Economic Density</p>
+                                        <p className="text-[10.5px] font-bold text-emerald-400 break-all">
+                                          ${econDensity.toLocaleString(undefined, { maximumFractionDigits: 0 })} USD / KM²
+                                        </p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5 text-left">
+                                        <p className="text-[7.5px] text-neutral-500 uppercase tracking-wider leading-none">Area Standings</p>
+                                        <p className="text-[10.5px] font-bold text-white uppercase">#{areaRank} in region</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5 text-left">
+                                        <p className="text-[7.5px] text-neutral-500 uppercase tracking-wider leading-none">GDP Standings</p>
+                                        <p className="text-[10.5px] font-bold text-white uppercase">#{gdpRank} in region</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5 text-left">
+                                        <p className="text-[7.5px] text-neutral-500 uppercase tracking-wider leading-none">Wealth Class</p>
+                                        <p className="text-[9.5px] font-bold text-emerald-400 uppercase truncate">{econClass}</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg space-y-0.5 text-left">
+                                        <p className="text-[7.5px] text-neutral-500 uppercase tracking-wider leading-none">Equator Distance</p>
+                                        <p className="text-[9px] font-bold text-sky-400 uppercase truncate">{country.capitalCoords ? `~${Math.round(Math.abs(country.capitalCoords.lat) * 111.12).toLocaleString()} KM` : "CLASSIFIED"}</p>
+                                      </div>
+
+                                      <div className="p-2 bg-neutral-900/50 border border-neutral-800/40 rounded-lg col-span-2 space-y-1.5 text-left">
+                                        <p className="text-[7.5px] text-neutral-500 uppercase tracking-wider leading-none">Key Alliances</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {alliancesList.map((all) => (
+                                            <button 
+                                              key={all.id}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedAllianceName(prev => prev === all.id ? null : all.id);
+                                              }}
+                                              className={cn(
+                                                "flex items-center gap-1.5 px-1.5 py-0.5 rounded-md border text-[8.5px] font-mono font-bold uppercase tracking-tight transition-all hover:scale-105 active:scale-95 cursor-pointer",
+                                                all.badgeColor,
+                                                all.textColor
+                                              )}
+                                              title={`${all.fullName} - Examine Members`}
+                                            >
+                                              <img src={all.logoUrl} className="w-3.5 h-2 rounded-sm object-cover shrink-0" alt="" referrerPolicy="no-referrer" />
+                                              <span>{all.name}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="p-4 bg-neutral-900 border border-neutral-800 rounded-xl flex-1 flex flex-col justify-center min-h-[90px] mt-4">
+                                    <p className="text-[8px] text-emerald-500 font-mono uppercase tracking-widest mb-2 flex items-center gap-1.5 font-bold">
+                                      <Globe2 className="w-2.5 h-2.5" />
+                                      Intelligence Brief
+                                    </p>
+                                    <p className="text-[11px] text-neutral-300 font-medium leading-relaxed italic overflow-y-auto max-h-[140px]">
+                                      "{(() => {
+                                        if (country.facts && country.facts.length > 0) {
+                                          return country.facts[Math.floor(Math.random() * country.facts.length)];
+                                        }
+                                        return country.facts?.[0] || "Territorial intelligence for this sector is currently under command review.";
+                                      })()}"
+                                    </p>
+                                  </div>
+                                  
+                                  <div className="text-center font-mono text-[7px] text-neutral-600 tracking-widest mt-1">
+                                    [ CLICK CARDBODY TO DISMISS ]
+                                  </div>
+                                </div>
+                              );
+                            }
+
                             return (
-                              <div className="flex gap-8 items-start">
+                              <div className="flex gap-8 items-start text-left">
                                 <div className="flex-1 space-y-4">
                                   <div className="flex items-center gap-3">
                                     <div className={cn("w-1 h-8 rounded-full", isGuessed ? "bg-emerald-500" : "bg-red-500")} />
@@ -2269,16 +3406,40 @@ export default function App() {
                                         alt="" 
                                       />
                                       <div>
-                                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{country.name}</h3>
-                                        <p className="text-[10px] text-neutral-500 font-mono uppercase tracking-[0.2em]">{country.continent} Sector</p>
+                                        <a
+                                          href={`https://en.wikipedia.org/wiki/${encodeURIComponent(country.name)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="inline-flex items-center gap-2 group/wiki text-white hover:text-emerald-400 transition-colors outline-none"
+                                          title={`Learn more about ${country.name} on Wikipedia`}
+                                        >
+                                          <h3 className="text-2xl font-black uppercase tracking-tighter group-hover/wiki:underline">
+                                            {country.name}
+                                          </h3>
+                                          <ExternalLink className="w-4 h-4 text-neutral-600 group-hover/wiki:text-emerald-400 transition-colors shrink-0" />
+                                        </a>
+                                        <p className="text-[10px] text-neutral-500 font-mono uppercase tracking-[0.2em] mt-1">{country.continent} Sector</p>
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="grid grid-cols-3 gap-6">
-                                    <div className="space-y-1">
-                                      <p className="text-[9px] text-neutral-500 font-mono uppercase">Capital City</p>
-                                      <p className="text-sm font-bold text-white uppercase">{country.capital || "Classified"}</p>
-                                    </div>
+                                  <div className="grid grid-cols-4 gap-4">
+                                    <a
+                                      href={country.capital ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(country.capital + ", " + country.name)}` : undefined}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className={cn(
+                                        "space-y-1 text-left block transition-colors outline-none",
+                                        country.capital ? "hover:text-emerald-400 group/capital cursor-pointer" : ""
+                                      )}
+                                    >
+                                      <p className="text-[9px] text-neutral-500 font-mono uppercase flex items-center gap-1.5">
+                                        <span>Capital City</span>
+                                        {country.capital && <ExternalLink className="w-2.5 h-2.5 text-neutral-600 group-hover/capital:text-emerald-400 transition-colors" />}
+                                      </p>
+                                      <p className="text-sm font-bold text-white uppercase group-hover/capital:text-emerald-400 transition-colors">{country.capital || "Classified"}</p>
+                                    </a>
                                     <div className="space-y-1">
                                       <p className="text-[9px] text-neutral-500 font-mono uppercase">Economic Output</p>
                                       <p className="text-sm font-bold text-emerald-500 uppercase">${(country.gdp / 1000).toFixed(1)}B</p>
@@ -2287,9 +3448,32 @@ export default function App() {
                                       <p className="text-[9px] text-neutral-500 font-mono uppercase">Total Area</p>
                                       <p className="text-sm font-bold text-white uppercase">{country.area.toLocaleString()} KM²</p>
                                     </div>
+                                    <div className="space-y-1">
+                                      <p className="text-[9px] text-neutral-500 font-mono uppercase">Key Alliances</p>
+                                      <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {alliancesList.map((all) => (
+                                          <button 
+                                            key={all.id}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedAllianceName(prev => prev === all.id ? null : all.id);
+                                            }}
+                                            className={cn(
+                                              "flex items-center gap-1 px-1.5 py-0.5 rounded border text-[8px] font-mono font-bold uppercase tracking-tight transition-all hover:scale-105 active:scale-95 cursor-pointer",
+                                              all.badgeColor,
+                                              all.textColor
+                                            )}
+                                            title={`${all.fullName} - Examine Members`}
+                                          >
+                                            <img src={all.logoUrl} className="w-3.5 h-2 rounded-sm object-cover shrink-0" alt="" referrerPolicy="no-referrer" />
+                                            <span>{all.name}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                                <div className="w-1/3 p-4 bg-neutral-800/40 rounded-xl border border-neutral-700/30">
+                                <div className="w-1/3 p-4 bg-neutral-800/40 rounded-xl border border-neutral-700/30 font-mono text-left">
                                   <p className="text-[9px] text-emerald-500 font-mono uppercase tracking-widest mb-2 flex items-center gap-2">
                                     <Globe2 className="w-3 h-3" />
                                     Intelligence Brief
@@ -2334,6 +3518,13 @@ export default function App() {
                             <span className={cn("text-[9px]", isActive ? "text-black/50" : (stats?.color || "text-emerald-500"))}>
                               {(() => {
                                 const gIds = viewingRecord.guessedIds || [];
+                                if (viewingRecord.gameType === 'flag') {
+                                  if (isAll) return `${gIds.length}/${viewingRecord.flagCountLimit || 20}`;
+                                  const originalQueue = viewingRecord.originalFlagQueue || [];
+                                  const totalInQueue = COUNTRIES.filter(c => originalQueue.includes(c.id) && c.continent === cont).length;
+                                  const guessed = gIds.filter(id => COUNTRIES.find(curr => curr.id === id)?.continent === cont).length;
+                                  return `${guessed}/${totalInQueue}`;
+                                }
                                 if (isAll) return `${gIds.length}/${COUNTRIES.length}`;
                                 const total = COUNTRIES.filter(c => c.continent === cont).length;
                                 const guessed = gIds.filter(id => COUNTRIES.find(curr => curr.id === id)?.continent === cont).length;
@@ -2357,140 +3548,368 @@ export default function App() {
                   transition={{ type: "spring", damping: 25, stiffness: 200 }}
                   className="flex flex-col gap-4 shrink-0 overflow-hidden"
                 >
-                  <div className="grid grid-cols-1 gap-4 shrink-0">
-                    {(() => {
-                      const continent = selectedContinentFilter;
-                      const isGlobal = !continent;
-                      const continentCountries = isGlobal ? COUNTRIES : COUNTRIES.filter(c => c.continent === continent);
-                      const recordGuessed = viewingRecord.guessedIds || [];
-                      const guessedCountries = continentCountries.filter(c => recordGuessed.includes(c.id));
-                      
-                      const totalArea = isGlobal ? totalPossibleArea : (continentTotals[continent || ""]?.area || 1);
-                      const coveredArea = guessedCountries.reduce((sum, c) => sum + c.area, 0);
-                      const areaPercent = (coveredArea / totalArea) * 100;
-
-                      const totalGdp = isGlobal ? totalPossibleGdp : (continentTotals[continent || ""]?.gdp || 1);
-                      const coveredGdp = guessedCountries.reduce((sum, c) => sum + (c.gdp || 0), 0);
-                      const gdpPercent = (coveredGdp / totalGdp) * 100;
-
-                      return (
-                        <>
-                          <div className="bg-neutral-900/50 border border-neutral-800/50 p-4 rounded-2xl space-y-3">
-                            <div className="flex justify-between items-center text-[9px] font-black uppercase text-neutral-500 tracking-widest">
-                              <span>{isGlobal ? "Global" : continent} Secured</span>
-                              <span className="text-white">{Math.round(areaPercent)}%</span>
-                            </div>
-                            <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                              <motion.div initial={{ width: 0 }} animate={{ width: `${areaPercent}%` }} className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]" />
-                            </div>
-                            <div className="flex justify-between items-center text-[8px] font-mono text-neutral-600">
-                              <span>{(coveredArea/1000).toLocaleString()}K / {(totalArea/1000).toLocaleString()}K KM²</span>
-                            </div>
-                          </div>
-                          <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl space-y-3">
-                            <div className="flex justify-between items-center text-[9px] font-black uppercase text-emerald-500 tracking-widest">
-                              <span>Economic Output</span>
-                              <span className="text-emerald-500">{Math.round(gdpPercent)}%</span>
-                            </div>
-                            <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                              <motion.div initial={{ width: 0 }} animate={{ width: `${gdpPercent}%` }} className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]" />
-                            </div>
-                            <div className="flex justify-between items-center text-[8px] font-mono text-emerald-600/60">
-                              <span>${(coveredGdp/1000).toFixed(1)}B / ${(totalGdp/1000).toFixed(1)}B</span>
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
+                  {/* Tab Selector */}
+                  <div className="grid grid-cols-2 p-1 bg-neutral-900/60 border border-neutral-800 rounded-xl shrink-0 font-mono">
+                    <button
+                      onClick={() => setExpansionPanelTab('countries')}
+                      className={cn(
+                        "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                        expansionPanelTab === 'countries'
+                          ? "bg-emerald-500 text-black shadow-md font-bold"
+                          : "text-neutral-400 hover:text-white"
+                      )}
+                    >
+                      Sectors
+                    </button>
+                    <button
+                      onClick={() => setExpansionPanelTab('alliances')}
+                      className={cn(
+                        "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5",
+                        expansionPanelTab === 'alliances'
+                          ? "bg-emerald-500 text-black shadow-md font-bold"
+                          : "text-neutral-400 hover:text-white"
+                      )}
+                    >
+                      <Globe className="w-3 h-3" />
+                      Alliances
+                    </button>
                   </div>
-                  <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
-                    <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
-                      <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Secured ({(viewingRecord.guessedIds || []).filter(id => !selectedContinentFilter || COUNTRIES.find(c => c.id === id)?.continent === selectedContinentFilter).length})
-                      </span>
-                      <button
-                        onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
-                        className="p-1.5 hover:bg-emerald-500/10 rounded-lg transition-all group flex items-center gap-2"
-                        title={expansionSort === 'alphabet' ? 'Switch to Wealth Sort' : 'Switch to Alphabetical Sort'}
-                      >
-                        <span className="text-[8px] font-mono font-bold text-neutral-500 group-hover:text-emerald-500 uppercase">
-                          {expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}
-                        </span>
-                        <ListFilter className={cn("w-3 h-3 transition-colors", expansionSort === 'alphabet' ? "text-neutral-500 group-hover:text-emerald-500" : "text-emerald-500")} />
-                      </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                      {(viewingRecord.guessedIds || [])
-                        .map(id => COUNTRIES.find(c => c.id === id))
-                        .filter((c): c is typeof COUNTRIES[0] => !!c && (!selectedContinentFilter || c.continent === selectedContinentFilter))
-                        .sort((a, b) => {
-                          if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
-                          return (b.gdp || 0) - (a.gdp || 0);
-                        })
-                        .map(country => {
-                          const id = country.id;
-                          const isSelected = selectedExpandedCountryId === id;
+
+                  {expansionPanelTab === 'countries' ? (
+                    <>
+                      <div className="grid grid-cols-1 gap-4 shrink-0">
+                        {(() => {
+                          const continent = selectedContinentFilter;
+                          const isGlobal = !continent;
+                          
+                          if (viewingRecord.gameType === 'flag') {
+                            const originalQueue = viewingRecord.originalFlagQueue || [];
+                            const continentCountriesInQueue = isGlobal 
+                              ? COUNTRIES.filter(c => originalQueue.includes(c.id)) 
+                              : COUNTRIES.filter(c => originalQueue.includes(c.id) && c.continent === continent);
+                            
+                            const recordGuessed = viewingRecord.guessedIds || [];
+                            const guessedCountries = continentCountriesInQueue.filter(c => recordGuessed.includes(c.id));
+                            
+                            const limit = isGlobal ? (viewingRecord.flagCountLimit || 20) : continentCountriesInQueue.length;
+                            const correctCount = guessedCountries.length;
+                            const flagPercent = limit > 0 ? (correctCount / limit) * 100 : 0;
+                            
+                            const totalDurationSeconds = (viewingRecord.flagDuration || 10) * 60;
+                            const spentDurationSeconds = viewingRecord.duration || 0;
+                            const timePercent = totalDurationSeconds > 0 
+                              ? Math.max(0, Math.min(100, ((totalDurationSeconds - spentDurationSeconds) / totalDurationSeconds) * 100))
+                              : 0;
+                            
+                            return (
+                              <>
+                                <div className="bg-neutral-900/50 border border-neutral-800/50 p-4 rounded-2xl space-y-3">
+                                  <div className="flex justify-between items-center text-[9px] font-black uppercase text-neutral-500 tracking-widest">
+                                    <span>{isGlobal ? "Global" : continent} Accuracy</span>
+                                    <span className="text-white">{Math.round(flagPercent)}%</span>
+                                  </div>
+                                  <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                                    <motion.div initial={{ width: 0 }} animate={{ width: `${flagPercent}%` }} className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]" />
+                                  </div>
+                                  <div className="flex justify-between items-center text-[8px] font-mono text-neutral-600">
+                                    <span>{correctCount} / {limit} Flags Solved</span>
+                                  </div>
+                                </div>
+                                <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl space-y-3">
+                                  <div className="flex justify-between items-center text-[9px] font-black uppercase text-emerald-500 tracking-widest">
+                                    <span>Time Saved</span>
+                                    <span className="text-emerald-500">{Math.round(timePercent)}%</span>
+                                  </div>
+                                  <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                                    <motion.div initial={{ width: 0 }} animate={{ width: `${timePercent}%` }} className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]" />
+                                  </div>
+                                  <div className="flex justify-between items-center text-[8px] font-mono text-emerald-600/60">
+                                    <span>{formatTime(Math.max(0, totalDurationSeconds - spentDurationSeconds))} / {formatTime(totalDurationSeconds)} Remaining</span>
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          }
+
+                          const continentCountries = isGlobal ? COUNTRIES : COUNTRIES.filter(c => c.continent === continent);
+                          const recordGuessed = viewingRecord.guessedIds || [];
+                          const guessedCountries = continentCountries.filter(c => recordGuessed.includes(c.id));
+                          
+                          const totalArea = isGlobal ? totalPossibleArea : (continentTotals[continent || ""]?.area || 1);
+                          const coveredArea = guessedCountries.reduce((sum, c) => sum + c.area, 0);
+                          const areaPercent = (coveredArea / totalArea) * 100;
+
+                          const totalGdp = isGlobal ? totalPossibleGdp : (continentTotals[continent || ""]?.gdp || 1);
+                          const coveredGdp = guessedCountries.reduce((sum, c) => sum + (c.gdp || 0), 0);
+                          const gdpPercent = (coveredGdp / totalGdp) * 100;
+
                           return (
-                            <button 
-                              key={id} 
-                              onClick={() => setSelectedExpandedCountryId(isSelected ? null : id)}
+                            <>
+                              <div className="bg-neutral-900/50 border border-neutral-800/50 p-4 rounded-2xl space-y-3">
+                                <div className="flex justify-between items-center text-[9px] font-black uppercase text-neutral-500 tracking-widest">
+                                  <span>{isGlobal ? "Global" : continent} Secured</span>
+                                  <span className="text-white">{Math.round(areaPercent)}%</span>
+                                </div>
+                                <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${areaPercent}%` }} className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.2)]" />
+                                </div>
+                                <div className="flex justify-between items-center text-[8px] font-mono text-neutral-600">
+                                  <span>{(coveredArea/1000).toLocaleString()}K / {(totalArea/1000).toLocaleString()}K KM²</span>
+                                </div>
+                              </div>
+                              <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-2xl space-y-3">
+                                <div className="flex justify-between items-center text-[9px] font-black uppercase text-emerald-500 tracking-widest">
+                                  <span>Economic Output</span>
+                                  <span className="text-emerald-500">{Math.round(gdpPercent)}%</span>
+                                </div>
+                                <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                                  <motion.div initial={{ width: 0 }} animate={{ width: `${gdpPercent}%` }} className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.2)]" />
+                                </div>
+                                <div className="flex justify-between items-center text-[8px] font-mono text-emerald-600/60">
+                                  <span>${(coveredGdp/1000).toFixed(1)}B / ${(totalGdp/1000).toFixed(1)}B</span>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                        <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+                          <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Secured (
+                              {(() => {
+                                const originalQueue = viewingRecord.originalFlagQueue || [];
+                                const isFlag = viewingRecord.gameType === 'flag';
+                                return (viewingRecord.guessedIds || []).filter(id => {
+                                  const country = COUNTRIES.find(c => c.id === id);
+                                  if (!country) return false;
+                                  if (isFlag && !originalQueue.includes(id)) return false;
+                                  return !selectedContinentFilter || country.continent === selectedContinentFilter;
+                                }).length;
+                              })()}
+                            )
+                          </span>
+                          <button
+                            onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
+                            className="p-1.5 hover:bg-emerald-500/10 rounded-lg transition-all group flex items-center gap-2"
+                            title={expansionSort === 'alphabet' ? 'Switch to Wealth Sort' : 'Switch to Alphabetical Sort'}
+                          >
+                            <span className="text-[8px] font-mono font-bold text-neutral-500 group-hover:text-emerald-500 uppercase">
+                              {expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}
+                            </span>
+                            <ListFilter className={cn("w-3 h-3 transition-colors", expansionSort === 'alphabet' ? "text-neutral-500 group-hover:text-emerald-500" : "text-emerald-500")} />
+                          </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                          {(() => {
+                            const originalQueue = viewingRecord.originalFlagQueue || [];
+                            const isFlag = viewingRecord.gameType === 'flag';
+                            const list = (viewingRecord.guessedIds || [])
+                              .map(id => COUNTRIES.find(c => c.id === id))
+                              .filter((c): c is typeof COUNTRIES[0] => {
+                                if (!c) return false;
+                                if (isFlag && !originalQueue.includes(c.id)) return false;
+                                return !selectedContinentFilter || c.continent === selectedContinentFilter;
+                              });
+                            
+                            return list
+                              .sort((a, b) => {
+                                if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
+                                return (b.gdp || 0) - (a.gdp || 0);
+                              })
+                              .map(country => {
+                                const id = country.id;
+                                const isSelected = selectedExpandedCountryId === id;
+                                return (
+                                  <button 
+                                    key={id} 
+                                    onClick={() => setSelectedExpandedCountryId(isSelected ? null : id)}
+                                    className={cn(
+                                      "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
+                                      isSelected ? "bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:text-emerald-400"
+                                    )}
+                                  >
+                                    <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10 shrink-0" alt="" />
+                                    <span className="flex-1 text-left truncate font-bold">{country.name}</span>
+                                    <span className="text-[8px] opacity-40 shrink-0">${Math.floor((country.gdp || 0)/1000).toLocaleString()}B</span>
+                                  </button>
+                                );
+                              });
+                          })()}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                        <div className="p-4 bg-red-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+                          <span className="text-[10px] font-black uppercase text-red-500 tracking-widest flex items-center gap-2">
+                            <XCircle className="w-3 h-3" />
+                            Missed (
+                              {(() => {
+                                const originalQueue = viewingRecord.originalFlagQueue || [];
+                                const isFlag = viewingRecord.gameType === 'flag';
+                                return COUNTRIES.filter(c => {
+                                  if (isFlag) {
+                                    if (!originalQueue.includes(c.id)) return false;
+                                  }
+                                  return !viewingRecord.guessedIds?.includes(c.id) && (!selectedContinentFilter || c.continent === selectedContinentFilter);
+                                }).length;
+                              })()}
+                            )
+                          </span>
+                          <button
+                            onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
+                            className="p-1.5 hover:bg-red-500/10 rounded-lg transition-all group flex items-center gap-2"
+                            title={expansionSort === 'alphabet' ? 'Switch to Wealth Sort' : 'Switch to Alphabetical Sort'}
+                          >
+                            <span className="text-[8px] font-mono font-bold text-neutral-500 group-hover:text-red-500 uppercase font-bold">
+                              {expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}
+                            </span>
+                            <ListFilter className={cn("w-3 h-3 transition-colors", expansionSort === 'alphabet' ? "text-neutral-500 group-hover:text-red-500" : "text-red-500")} />
+                          </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                          {COUNTRIES.filter(c => {
+                              const originalQueue = viewingRecord.originalFlagQueue || [];
+                              const isFlag = viewingRecord.gameType === 'flag';
+                              if (isFlag) {
+                                if (!originalQueue.includes(c.id)) return false;
+                              }
+                              return !viewingRecord.guessedIds?.includes(c.id) && (!selectedContinentFilter || c.continent === selectedContinentFilter);
+                            })
+                            .sort((a, b) => {
+                              if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
+                              return (b.gdp || 0) - (a.gdp || 0);
+                            })
+                            .map(country => {
+                              const isSelected = selectedExpandedCountryId === country.id;
+                              return (
+                                <button 
+                                  key={country.id} 
+                                  onClick={() => setSelectedExpandedCountryId(isSelected ? null : country.id)}
+                                  className={cn(
+                                    "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
+                                    isSelected ? "bg-red-500/20 border-red-400 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-500 hover:text-red-400"
+                                  )}
+                                >
+                                  <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10 opacity-60 shrink-0" alt="" />
+                                  <span className="flex-1 text-left truncate font-bold">{country.name}</span>
+                                  <span className="text-[8px] opacity-40 shrink-0">${Math.floor(country.gdp/1000).toLocaleString()}B</span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                      <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+                        <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2 animate-pulse">
+                          <Globe className="w-3 h-3" />
+                          Diplomatic Alliances ({ALLIANCES_DATA.length})
+                        </span>
+                        <button
+                          onClick={() => setAllianceSort(allianceSort === 'alphabet' ? 'size' : 'alphabet')}
+                          title={allianceSort === 'alphabet' ? 'Sort by Member Size' : 'Sort Alphabetically'}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-900/80 border border-neutral-800/80 text-[8px] font-bold text-neutral-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all outline-none"
+                        >
+                          <span className="uppercase text-neutral-500">Sort:</span>
+                          <span className="text-neutral-300 font-mono uppercase">{allianceSort === 'alphabet' ? 'A-Z' : 'Size'}</span>
+                          <ListFilter className={cn("w-3 h-3 transition-colors", allianceSort === 'alphabet' ? "text-neutral-500" : "text-emerald-400")} />
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                        {[...ALLIANCES_DATA]
+                          .sort((a, b) => {
+                            if (allianceSort === 'alphabet') {
+                              return a.name.localeCompare(b.name);
+                            } else {
+                              const sizeA = COUNTRIES.filter(c => a.matches(c)).length;
+                              const sizeB = COUNTRIES.filter(c => b.matches(c)).length;
+                              return sizeB - sizeA;
+                            }
+                          })
+                          .map((alliance) => {
+                            const allianceCountries = COUNTRIES.filter(c => alliance.matches(c));
+                          const guessedInAlliance = allianceCountries.filter(c => (viewingRecord.guessedIds || []).includes(c.id)).length;
+                          const totalAllianceMembers = allianceCountries.length;
+                          const completionRate = totalAllianceMembers > 0 ? (guessedInAlliance / totalAllianceMembers) * 100 : 0;
+                          const isCurrentlySelected = selectedAllianceName === alliance.id;
+
+                          return (
+                            <button
+                              key={alliance.id}
+                              onClick={() => {
+                                setSelectedAllianceName(prev => {
+                                  if (prev === alliance.id) {
+                                    setIsAllianceHighlighted(false);
+                                    return null;
+                                  } else {
+                                    setIsAllianceHighlighted(true);
+                                    return alliance.id;
+                                  }
+                                });
+                              }}
                               className={cn(
-                                "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
-                                isSelected ? "bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:text-emerald-400"
+                                "w-full text-left p-3 rounded-2xl border transition-all duration-200 hover:scale-[1.01] flex flex-col gap-2.5 relative overflow-hidden group/item",
+                                isCurrentlySelected
+                                  ? "bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                                  : "bg-neutral-900/60 border-neutral-800/80 hover:bg-[#15151a] hover:border-neutral-700/60"
                               )}
                             >
-                              <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10" alt="" />
-                              <span className="flex-1 text-left truncate font-bold">{country.name}</span>
-                              <span className="text-[8px] opacity-40">${Math.floor((country.gdp || 0)/1000).toLocaleString()}B</span>
+                              <div className="flex items-center gap-3 relative z-10">
+                                <div className="w-10 h-7 bg-neutral-950/60 border border-neutral-800 rounded overflow-hidden flex items-center justify-center shrink-0">
+                                  <img
+                                    src={alliance.logoUrl}
+                                    className="h-5 w-auto object-contain"
+                                    onError={(e) => {
+                                      (e.currentTarget as any).src = "https://flagcdn.com/w20/un.png";
+                                    }}
+                                    alt=""
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-baseline justify-between gap-1.5">
+                                    <h4 className="text-[11px] font-black text-white uppercase tracking-tight truncate group-hover/item:text-emerald-400 transition-colors">
+                                      {alliance.fullName}
+                                    </h4>
+                                    <span className="text-[9px] font-black font-mono text-emerald-400 shrink-0">
+                                      {alliance.name}
+                                    </span>
+                                  </div>
+                                  <p className="text-[8.5px] text-neutral-400 line-clamp-1 mt-0.5 leading-normal">
+                                    {alliance.description}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="space-y-1 relative z-10 font-mono">
+                                <div className="flex justify-between items-center text-[8px]">
+                                  <span className="text-neutral-500 uppercase">Surveyed Status</span>
+                                  <span className={cn(
+                                    "font-bold",
+                                    completionRate === 100 ? "text-emerald-400" : "text-neutral-300"
+                                  )}>
+                                    {guessedInAlliance} / {totalAllianceMembers} ({completionRate.toFixed(0)}%)
+                                  </span>
+                                </div>
+                                <div className="w-full h-1 bg-neutral-950/80 rounded-full overflow-hidden border border-white/5">
+                                  <div
+                                    className={cn(
+                                      "h-full rounded-full transition-all duration-500",
+                                      completionRate === 100 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : "bg-blue-500"
+                                    )}
+                                    style={{ width: `${completionRate}%` }}
+                                  />
+                                </div>
+                              </div>
                             </button>
                           );
                         })}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
-                    <div className="p-4 bg-red-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
-                      <span className="text-[10px] font-black uppercase text-red-500 tracking-widest flex items-center gap-2">
-                        <XCircle className="w-3 h-3" />
-                        Missed ({COUNTRIES.filter(c => !viewingRecord.guessedIds?.includes(c.id) && (!selectedContinentFilter || c.continent === selectedContinentFilter)).length})
-                      </span>
-                      <button
-                        onClick={() => setExpansionSort(expansionSort === 'alphabet' ? 'wealth' : 'alphabet')}
-                        className="p-1.5 hover:bg-red-500/10 rounded-lg transition-all group flex items-center gap-2"
-                        title={expansionSort === 'alphabet' ? 'Switch to Wealth Sort' : 'Switch to Alphabetical Sort'}
-                      >
-                        <span className="text-[8px] font-mono font-bold text-neutral-500 group-hover:text-red-500 uppercase">
-                          {expansionSort === 'alphabet' ? 'A-Z' : 'Wealth'}
-                        </span>
-                        <ListFilter className={cn("w-3 h-3 transition-colors", expansionSort === 'alphabet' ? "text-neutral-500 group-hover:text-red-500" : "text-red-500")} />
-                      </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                      {COUNTRIES.filter(c => !viewingRecord.guessedIds?.includes(c.id) && (!selectedContinentFilter || c.continent === selectedContinentFilter))
-                        .sort((a, b) => {
-                          if (expansionSort === 'alphabet') return a.name.localeCompare(b.name);
-                          return (b.gdp || 0) - (a.gdp || 0);
-                        })
-                        .map(country => {
-                          const isSelected = selectedExpandedCountryId === country.id;
-                          return (
-                            <button 
-                              key={country.id} 
-                              onClick={() => setSelectedExpandedCountryId(isSelected ? null : country.id)}
-                              className={cn(
-                                "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
-                                isSelected ? "bg-red-500/20 border-red-400 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-500 hover:text-red-400"
-                              )}
-                            >
-                              <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10 opacity-60" alt="" />
-                              <span className="flex-1 text-left truncate font-bold">{country.name}</span>
-                              <span className="text-[8px] opacity-40">${Math.floor(country.gdp/1000).toLocaleString()}B</span>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
+                  )}
                 </motion.div>
 
 
@@ -2687,6 +4106,79 @@ export default function App() {
                   Cancel Authorization
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Flag Quantity Selection Prompt */}
+      <AnimatePresence>
+        {showFlagQuantityPrompt && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[600] bg-black/95 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-[#121212] border border-neutral-800 p-8 rounded-[32px] shadow-2xl max-w-md w-full text-center space-y-8 relative overflow-hidden"
+            >
+              {/* Styling accents */}
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500/50 to-transparent" />
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-500/5 rounded-full blur-[60px]" />
+
+              <div className="space-y-3">
+                <div className="w-16 h-16 bg-rose-500/10 rounded-2xl flex items-center justify-center mx-auto text-rose-500 border border-rose-500/20 rotate-3">
+                  <Flag className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">QUANTITY PROTOCOL</h3>
+                  <p className="text-neutral-500 text-[9px] font-mono uppercase tracking-[0.2em] font-bold">Select Flag Count for Decryption</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[5, 10, 20, 50, 100, 195].map((q) => {
+                  let badge = "TACTICAL";
+                  let color = "hover:border-rose-500/40 hover:bg-rose-500/5 text-rose-400";
+                  if (q === 5) { badge = "SABER"; color = "hover:border-emerald-500/40 hover:bg-emerald-500/5 text-emerald-400"; }
+                  else if (q === 10) { badge = "STANDARD"; color = "hover:border-cyan-500/40 hover:bg-cyan-500/5 text-cyan-400"; }
+                  else if (q === 20) { badge = "ADVANCED"; color = "hover:border-blue-500/40 hover:bg-blue-500/5 text-blue-400"; }
+                  else if (q === 50) { badge = "INTENSE"; color = "hover:border-purple-500/40 hover:bg-purple-500/5 text-purple-400"; }
+                  else if (q === 100) { badge = "HARDCORE"; color = "hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-400"; }
+                  else if (q === 195) { badge = "ALL GLOBE"; color = "hover:border-rose-500/40 hover:bg-rose-500/5 text-rose-500"; }
+
+                  return (
+                    <button
+                      key={q}
+                      onClick={() => {
+                        setFlagCountLimit(q);
+                        setShowFlagQuantityPrompt(false);
+                        setGameType('flag');
+                        setFlagGameMode('timed');
+                        startGame(selectedDuration, 'flag', q);
+                      }}
+                      className={cn(
+                        "p-4 bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.98] group",
+                        color
+                      )}
+                    >
+                      <span className="text-2xl font-black font-mono leading-none">{q}</span>
+                      <span className="text-[8px] opacity-60 font-mono tracking-widest font-black uppercase">{badge}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button 
+                onClick={() => setShowFlagQuantityPrompt(false)}
+                className="w-full py-2 text-neutral-600 hover:text-neutral-400 transition-colors font-black uppercase tracking-widest text-[9px]"
+              >
+                Abort Protocol
+              </button>
             </motion.div>
           </motion.div>
         )}
