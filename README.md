@@ -386,6 +386,7 @@ This transforms gameplay into an interactive geopolitical analytics environment.
 | `[ARROW KEYS]`       | Fluid Map Panning                     |
 | `[+] / [-]`          | Micro/Macro Zooming                   |
 | `[ESCAPE]`           | Clear Input / Close Modals            |
+| `[CMD / CTRL] + [B]` | Toggle Globe Rotation                 |
 
 ---
 
