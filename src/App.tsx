@@ -23,8 +23,6 @@ import {
   TrendingUp,
   LayoutDashboard,
   Trash2,
-  Volume2,
-  VolumeX,
   LogIn,
   LogOut,
   HelpCircle,
@@ -39,7 +37,8 @@ import {
   Shuffle,
   Target,
   Keyboard,
-  ExternalLink
+  ExternalLink,
+  Palette
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
@@ -304,7 +303,17 @@ export default function App() {
   const [mostRecentGuessedId, setMostRecentGuessedId] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [gameMode, setGameMode] = useState<'zen' | 'challenge'>('zen');
-  const [gameType, setGameType] = useState<'typing' | 'flag'>('typing');
+  const [gameType, setGameType] = useState<'typing' | 'flag' | 'highlight'>('typing');
+  const [highlightQueue, setHighlightQueue] = useState<string[]>([]);
+  const [originalHighlightQueue, setOriginalHighlightQueue] = useState<string[]>([]);
+  const [currentTargetHighlightId, setCurrentTargetHighlightId] = useState<string | null>(null);
+  const [highlightCountLimit, setHighlightCountLimit] = useState(20);
+  const [showHighlightQuantityPrompt, setShowHighlightQuantityPrompt] = useState(false);
+  const [skippedHighlightsCount, setSkippedHighlightsCount] = useState<Record<string, number>>({});
+  const [deferredHighlights, setDeferredHighlights] = useState<string[]>([]);
+  
+  const [plotContinentsColorMode, setPlotContinentsColorMode] = useState(false);
+
   const [showFlagQuantityPrompt, setShowFlagQuantityPrompt] = useState(false);
   const [flagGameMode, setFlagGameMode] = useState<'timed' | 'count'>('timed');
   const [flagCountLimit, setFlagCountLimit] = useState(20);
@@ -312,6 +321,21 @@ export default function App() {
   const [flagQueue, setFlagQueue] = useState<string[]>([]);
   const [originalFlagQueue, setOriginalFlagQueue] = useState<string[]>([]);
   const [skippedFlagsCount, setSkippedFlagsCount] = useState<Record<string, number>>({});
+  const [deferredFlags, setDeferredFlags] = useState<string[]>([]);
+
+  const sanitizeHintText = (text: string, country: any): string => {
+    if (!text || !country) return "";
+    let sanitizedText = text;
+    const namesToSanitize = [country.name, ...(country.aliases || [])];
+    namesToSanitize.forEach(name => {
+      if (name && name.length > 2) {
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escapedName, 'gi');
+        sanitizedText = sanitizedText.replace(regex, '[This Territory]');
+      }
+    });
+    return sanitizedText;
+  };
   const [flagCacheBuster, setFlagCacheBuster] = useState<number>(0);
   const [selectedDuration, setSelectedDuration] = useState(10); // Minutes
   const [timeLeft, setTimeLeft] = useState(600); // Seconds
@@ -349,6 +373,8 @@ export default function App() {
     setIsAllianceFlagRefreshing(false);
     setAllianceLogoError(false);
   }, [selectedAllianceName, allianceFlagRefreshKey]);
+
+
 
   const highlightedAllianceMemberIds = useMemo(() => {
     if (!selectedAllianceName || !isAllianceHighlighted) return null;
@@ -752,9 +778,65 @@ export default function App() {
           setInputValue('');
 
           const nextQueue = flagQueue.slice(1);
-          setFlagQueue(nextQueue);
           if (nextQueue.length > 0) {
+            setFlagQueue(nextQueue);
             setCurrentTargetFlagId(nextQueue[0]);
+          } else if (deferredFlags.length > 0) {
+            const shuffledDeferred = [...deferredFlags].sort(() => Math.random() - 0.5);
+            setFlagQueue(shuffledDeferred);
+            setCurrentTargetFlagId(shuffledDeferred[0]);
+            setDeferredFlags([]);
+            setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
+            setTimeout(() => setFeedback(null), 3000);
+          } else {
+            finishGame();
+          }
+        } else {
+           setFeedback({ text: `INCORRECT GUESS`, type: 'error' });
+           setTimeout(() => setFeedback(null), 1000);
+        }
+        return;
+      }
+
+      if (gameType === 'highlight' && currentTargetHighlightId) {
+        const target = COUNTRIES.find(c => c.id === currentTargetHighlightId);
+        if (!target) return;
+        const names = [target.name.toLowerCase(), ...target.aliases.map(a => a.toLowerCase())];
+        
+        if (names.includes(normalized)) {
+          const newGuessed = new Set(guessedIds);
+          if (!newGuessed.has(target.id)) {
+            newGuessed.add(target.id);
+            setGuessedIds(newGuessed);
+            setLastGuessedId(target.id);
+            setMostRecentGuessedId(target.id);
+            
+            const basePoints = getCountryPoints(target);
+            const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+            setScore(prev => prev + points);
+            
+            setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
+            setTimeout(() => setFeedback(null), 1500);
+
+            if (target.code) {
+              setActiveFlag(target.code);
+              setTimeout(() => setActiveFlag(null), 1500);
+            }
+          }
+
+          setInputValue('');
+
+          const nextQueue = highlightQueue.slice(1);
+          if (nextQueue.length > 0) {
+            setHighlightQueue(nextQueue);
+            setCurrentTargetHighlightId(nextQueue[0]);
+          } else if (deferredHighlights.length > 0) {
+            const shuffledDeferred = [...deferredHighlights].sort(() => Math.random() - 0.5);
+            setHighlightQueue(shuffledDeferred);
+            setCurrentTargetHighlightId(shuffledDeferred[0]);
+            setDeferredHighlights([]);
+            setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
+            setTimeout(() => setFeedback(null), 3000);
           } else {
             finishGame();
           }
@@ -986,44 +1068,81 @@ export default function App() {
     if (gameType !== 'flag' || !currentTargetFlagId || flagQueue.length === 0) return;
     
     const targetCountry = COUNTRIES.find(c => c.id === currentTargetFlagId);
-    const newSkipCount = (skippedFlagsCount[currentTargetFlagId] || 0) + 1;
+    const prevSkipCount = skippedFlagsCount[currentTargetFlagId] || 0;
     
-    if (newSkipCount >= 3) {
-      setFeedback({ text: `PROTOCOL FAILS: ${targetCountry?.name.toUpperCase() || 'UNKNOWN'} SKIPPED THREE TIMES`, type: 'error' });
-      setTimeout(() => setFeedback(null), 2500);
-      finishGame();
+    // Guardian check: only 1 skip allowed
+    if (prevSkipCount >= 1) {
+      setFeedback({ text: "NO MORE SKIPS REMAINING FOR THIS FLAG", type: 'error' });
+      setTimeout(() => setFeedback(null), 2000);
       return;
     }
 
+    const newSkipCount = prevSkipCount + 1;
     setSkippedFlagsCount(prev => ({ ...prev, [currentTargetFlagId!]: newSkipCount }));
+    setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''}`, type: 'error' });
+    setTimeout(() => setFeedback(null), 1500);
 
-    if (newSkipCount === 2) {
-      const capital = targetCountry?.capital || 'Unknown';
-      setFeedback({ text: `HINT PROTOCOL CRITICAL: CAPITAL: ${capital.toUpperCase()}`, type: 'info' });
+    // Save current highlighted country to deferred to be presented later in the 2nd stage
+    const nextDeferred = [...deferredFlags, currentTargetFlagId];
+    setDeferredFlags(nextDeferred);
+
+    const nextQueue = flagQueue.slice(1);
+    if (nextQueue.length > 0) {
+      setFlagQueue(nextQueue);
+      setCurrentTargetFlagId(nextQueue[0]);
+    } else if (nextDeferred.length > 0) {
+      // Reached the end of the immediate list, shuffle and show deferred
+      const shuffledDeferred = [...nextDeferred].sort(() => Math.random() - 0.5);
+      setFlagQueue(shuffledDeferred);
+      setCurrentTargetFlagId(shuffledDeferred[0]);
+      setDeferredFlags([]);
+      setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
       setTimeout(() => setFeedback(null), 3000);
     } else {
-      setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''} (${newSkipCount}/2)`, type: 'error' });
-      setTimeout(() => setFeedback(null), 1000);
+      finishGame();
     }
+  };
 
-    if (flagQueue.length === 1) {
-      if (flagGameMode === 'timed') {
-        setFeedback({ text: `LAST TARGET CYCLING`, type: 'info' });
-        setTimeout(() => setFeedback(null), 1000);
-      } else {
-        if (newSkipCount >= 3) {
-          finishGame();
-        }
-      }
+  const skipHighlight = () => {
+    if (gameType !== 'highlight' || !currentTargetHighlightId || highlightQueue.length === 0) return;
+    
+    const targetCountry = COUNTRIES.find(c => c.id === currentTargetHighlightId);
+    const prevSkipCount = skippedHighlightsCount[currentTargetHighlightId] || 0;
+    
+    // Guardian check: only 1 skip allowed
+    if (prevSkipCount >= 1) {
+      setFeedback({ text: "NO MORE SKIPS REMAINING FOR THIS TARGET", type: 'error' });
+      setTimeout(() => setFeedback(null), 2000);
       return;
     }
 
-    const nextQueue = [...flagQueue.slice(1), flagQueue[0]];
-    setFlagQueue(nextQueue);
-    setCurrentTargetFlagId(nextQueue[0]);
+    const newSkipCount = prevSkipCount + 1;
+    setSkippedHighlightsCount(prev => ({ ...prev, [currentTargetHighlightId!]: newSkipCount }));
+    setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''}`, type: 'error' });
+    setTimeout(() => setFeedback(null), 1500);
+
+    // Save current highlighted country to deferred to be presented later in the 2nd stage
+    const nextDeferred = [...deferredHighlights, currentTargetHighlightId];
+    setDeferredHighlights(nextDeferred);
+
+    const nextQueue = highlightQueue.slice(1);
+    if (nextQueue.length > 0) {
+      setHighlightQueue(nextQueue);
+      setCurrentTargetHighlightId(nextQueue[0]);
+    } else if (nextDeferred.length > 0) {
+      // Reached the end of the immediate list, shuffle and show deferred
+      const shuffledDeferred = [...nextDeferred].sort(() => Math.random() - 0.5);
+      setHighlightQueue(shuffledDeferred);
+      setCurrentTargetHighlightId(shuffledDeferred[0]);
+      setDeferredHighlights([]);
+      setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
+      setTimeout(() => setFeedback(null), 3000);
+    } else {
+      finishGame();
+    }
   };
 
-  const startGame = (forcedDuration?: number, forcedGameType?: 'typing' | 'flag', forcedFlagCountLimit?: number) => {
+  const startGame = (forcedDuration?: number, forcedGameType?: 'typing' | 'flag' | 'highlight', forcedFlagCountLimit?: number) => {
     setHasStarted(true);
     setStartTime(Date.now());
     
@@ -1040,11 +1159,118 @@ export default function App() {
       setOriginalFlagQueue(initialQueue);
       setCurrentTargetFlagId(initialQueue[0]);
       setSkippedFlagsCount({});
+      setDeferredFlags([]);
+      
+      setHighlightQueue([]);
+      setOriginalHighlightQueue([]);
+      setCurrentTargetHighlightId(null);
+      setSkippedHighlightsCount({});
+      setDeferredHighlights([]);
+    } else if (activeGameType === 'highlight') {
+      let eligible = COUNTRIES;
+      if (selectedContinentFilter && selectedContinentFilter !== 'GLOBAL') {
+        eligible = COUNTRIES.filter(c => c.continent.toUpperCase() === selectedContinentFilter.toUpperCase());
+      }
+      
+      const limit = forcedFlagCountLimit !== undefined ? forcedFlagCountLimit : highlightCountLimit;
+      
+      // Separate small island nations that are often invisible or tiny on map
+      const INVISIBLE_ISLANDS_CODES = new Set([
+        'ag', 'bh', 'bb', 'cv', 'km', 'dm', 'gd', 'ki', 'mv', 'mt', 'mh', 'mu', 'fm', 'nr', 'pw', 'kn', 'lc', 'vc', 'ws', 'st', 'sc', 'sg', 'to', 'tv'
+      ]);
+      const eligibleIslands = eligible.filter(c => INVISIBLE_ISLANDS_CODES.has(c.code.toLowerCase()));
+      const eligibleNonIslands = eligible.filter(c => !INVISIBLE_ISLANDS_CODES.has(c.code.toLowerCase()));
+
+      let targetIslandCount = 0;
+      if (limit === 10) targetIslandCount = 1;
+      else if (limit === 20) targetIslandCount = 3;
+      else if (limit === 50) targetIslandCount = 7;
+      else if (limit === 100) targetIslandCount = 15;
+      else {
+        targetIslandCount = Math.floor(0.15 * limit);
+      }
+
+      // Clamp targets to available pool sizes
+      targetIslandCount = Math.min(targetIslandCount, eligibleIslands.length);
+      targetIslandCount = Math.min(targetIslandCount, limit);
+
+      let targetNonIslandCount = limit - targetIslandCount;
+      targetNonIslandCount = Math.min(targetNonIslandCount, eligibleNonIslands.length);
+
+      // Re-adjust targetIslandCount if non-islands can't fill the remainder
+      if (targetIslandCount + targetNonIslandCount < limit) {
+        targetIslandCount = Math.min(limit - targetNonIslandCount, eligibleIslands.length);
+      }
+
+      const selectedIslands = [...eligibleIslands].sort(() => Math.random() - 0.5).slice(0, targetIslandCount);
+      
+      let selectedNonIslands: typeof COUNTRIES = [];
+      if (!selectedContinentFilter || selectedContinentFilter === 'GLOBAL') {
+        // Group by continent to avoid clustering in one place
+        const byContinent: Record<string, typeof COUNTRIES> = {};
+        eligibleNonIslands.forEach(c => {
+          if (!byContinent[c.continent]) {
+            byContinent[c.continent] = [];
+          }
+          byContinent[c.continent].push(c);
+        });
+
+        // Shuffle each group
+        Object.keys(byContinent).forEach(cont => {
+          byContinent[cont].sort(() => Math.random() - 0.5);
+        });
+
+        const continents = Object.keys(byContinent).sort(() => Math.random() - 0.5);
+        const indices: Record<string, number> = {};
+        continents.forEach(cont => { indices[cont] = 0; });
+
+        let continentIndex = 0;
+        while (selectedNonIslands.length < targetNonIslandCount) {
+          let addedAny = false;
+          for (let i = 0; i < continents.length; i++) {
+            const cont = continents[(continentIndex + i) % continents.length];
+            const idx = indices[cont];
+            if (idx < byContinent[cont].length) {
+              selectedNonIslands.push(byContinent[cont][idx]);
+              indices[cont] = idx + 1;
+              addedAny = true;
+              if (selectedNonIslands.length >= targetNonIslandCount) break;
+            }
+          }
+          if (!addedAny) break;
+          continentIndex = (continentIndex + 1) % continents.length;
+        }
+      } else {
+        selectedNonIslands = [...eligibleNonIslands].sort(() => Math.random() - 0.5).slice(0, targetNonIslandCount);
+      }
+
+      // Combine and shuffle the finished queue
+      const combined = [...selectedIslands, ...selectedNonIslands];
+      const initialQueue = combined.map(c => c.id).sort(() => Math.random() - 0.5);
+
+      setHighlightQueue(initialQueue);
+      setOriginalHighlightQueue(initialQueue);
+      setCurrentTargetHighlightId(initialQueue[0]);
+      setSkippedHighlightsCount({});
+      setDeferredHighlights([]);
+      
+      setFlagQueue([]);
+      setOriginalFlagQueue([]);
+      setCurrentTargetFlagId(null);
+      setSkippedFlagsCount({});
+      setDeferredFlags([]);
     } else {
       setFlagQueue([]);
       setOriginalFlagQueue([]);
       setCurrentTargetFlagId(null);
       setSkippedFlagsCount({});
+      setDeferredFlags([]);
+      
+      setHighlightQueue([]);
+      setOriginalHighlightQueue([]);
+      setCurrentTargetHighlightId(null);
+      setSkippedHighlightsCount({});
+      setDeferredHighlights([]);
     }
   };
 
@@ -1074,6 +1300,13 @@ export default function App() {
     setFlagQueue([]);
     setOriginalFlagQueue([]);
     setSkippedFlagsCount({});
+    setDeferredFlags([]);
+    
+    setCurrentTargetHighlightId(null);
+    setHighlightQueue([]);
+    setOriginalHighlightQueue([]);
+    setSkippedHighlightsCount({});
+    setDeferredHighlights([]);
   };
 
   useEffect(() => {
@@ -1213,6 +1446,18 @@ export default function App() {
                 >
                   <Flag className="w-3.5 h-3.5" />
                 </button>
+                <button 
+                  onClick={() => {
+                    setShowHighlightQuantityPrompt(true);
+                  }}
+                  title="Guess the Highlighted Country Mode"
+                  className={cn(
+                    "p-1.5 rounded-md transition-all flex items-center justify-center",
+                    gameType === 'highlight' ? "bg-amber-500 text-black shadow-md" : "text-neutral-500 hover:text-neutral-200"
+                  )}
+                >
+                  <Target className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {gameType === 'flag' && (
@@ -1234,7 +1479,26 @@ export default function App() {
                 </div>
               )}
 
-              {gameType !== 'flag' && (
+              {gameType === 'highlight' && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[7px] lg:text-[9px] text-neutral-500 font-mono uppercase">Qty:</span>
+                  <select 
+                    value={highlightCountLimit}
+                    onChange={(e) => {
+                      const count = Number(e.target.value);
+                      setHighlightCountLimit(count);
+                      startGame(selectedDuration, 'highlight', count);
+                    }}
+                    className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-amber-500 outline-hidden"
+                  >
+                    {[5, 10, 20, 50, 100, 195].map(q => (
+                      <option key={q} value={q}>{q} Targets</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {gameType === 'typing' && (
                 <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
                   <button 
                     onClick={() => setGameMode('zen')}
@@ -1396,6 +1660,97 @@ export default function App() {
           "w-full border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col bg-[#121212]/50 shrink-0 h-[35dvh] lg:h-auto lg:max-h-full z-20 transition-all duration-500",
           isSatelliteView ? "lg:w-64" : "lg:w-80"
         )}>
+           {/* Guess the Highlighted Country Unit */}
+           {gameType === 'highlight' && currentTargetHighlightId && hasStarted && !isFinished && (
+             <div className="p-4 lg:p-5 pb-2 lg:pb-0 space-y-4 lg:space-y-5 shrink-0">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className="p-4 bg-neutral-900/80 backdrop-blur-md border border-amber-500/30 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.1)] space-y-4"
+                >
+                   <div className="flex justify-between items-center px-1">
+                     <span className="text-[9px] text-amber-500 font-mono uppercase tracking-[0.2em] flex items-center gap-2">
+                       <Target className="w-3 h-3 animate-pulse" />
+                       Country Highlight Guess
+                     </span>
+                     <span className="text-[9px] text-neutral-500 font-mono">
+                       {guessedIds.size + 1} / {highlightCountLimit}
+                     </span>
+                   </div>
+                   
+                   {/* Description & Guide visual card */}
+                   <div className="p-4 bg-black/40 rounded-xl border border-white/5 space-y-2 text-left">
+                     <p className="text-[10px] text-neutral-400 font-mono leading-relaxed">
+                       A sector has been highlighted on the world map in <span className="text-yellow-400 font-bold font-mono">YELLOW</span>.
+                     </p>
+                     <p className="text-[10px] text-neutral-400 font-mono leading-relaxed">
+                       Identify its sovereign designation. Use the input field below to submit your guess.
+                     </p>
+                   </div>
+                   
+                   <div className="px-1 flex items-center justify-between">
+                      <span className="text-[8px] text-neutral-600 font-mono uppercase">
+                        {(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) > 0 
+                          ? `Skips: ${skippedHighlightsCount[currentTargetHighlightId || '']}/2` 
+                          : 'Status: Awaiting Input'}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={skipHighlight}
+                          disabled={(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1}
+                          className={cn(
+                            "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all group",
+                            (skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1
+                              ? "bg-neutral-900 border border-neutral-800 text-neutral-600 cursor-not-allowed"
+                              : "bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white cursor-pointer"
+                          )}
+                          title={(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1 ? "No runs of evasion remain for this sector." : "Skip this target"}
+                        >
+                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1 ? "Final Try" : "Skip"}</span>
+                          <Shuffle className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" />
+                        </button>
+                      </div>
+                   </div>
+                </motion.div>
+
+                {currentTargetHighlightId && (skippedHighlightsCount[currentTargetHighlightId] || 0) >= 1 && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="p-3 bg-neutral-900 border border-amber-500/30 rounded-xl space-y-1.5 text-left mb-4"
+                  >
+                    <div className="text-[8.5px] font-mono text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <Brain className="w-3.5 h-3.5 animate-pulse text-amber-500" />
+                      Intel Hint (Second Chance)
+                    </div>
+                    <div className="space-y-1 font-mono text-[9px] text-neutral-300">
+                      {(() => {
+                        const country = COUNTRIES.find(c => c.id === currentTargetHighlightId);
+                        return (
+                          <>
+                            <div className="flex items-start gap-1">
+                              <span className="text-amber-500/70 font-bold text-[8px] shrink-0 uppercase">[CAPITAL]:</span> 
+                              {country?.capital ? (
+                                <span className="text-white font-bold">{country.capital}</span>
+                              ) : (
+                                <span className="text-white font-bold">Unknown</span>
+                              )}
+                            </div>
+                            {country?.facts && country.facts.length > 0 && (
+                              <div className="leading-relaxed mt-1 flex items-start gap-1 text-neutral-400">
+                                <span className="text-amber-500/70 font-bold text-[8px] shrink-0 uppercase">[DOSSIER]:</span> 
+                                <span>{sanitizeHintText(country.facts[0], country)}</span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </motion.div>
+                )}
+             </div>
+           )}
+
            {/* Flag Decryption Unit - Higher Priority Display */}
            {gameType === 'flag' && currentTargetFlagId && hasStarted && !isFinished && (
              <div className="p-4 lg:p-5 pb-2 lg:pb-0 space-y-4 lg:space-y-5 shrink-0">
@@ -1427,7 +1782,7 @@ export default function App() {
                    <div className="px-1 flex items-center justify-between">
                       <span className="text-[8px] text-neutral-600 font-mono uppercase">
                         {(skippedFlagsCount[currentTargetFlagId || ''] || 0) > 0 
-                          ? `Skips: ${skippedFlagsCount[currentTargetFlagId || '']}/2` 
+                          ? 'Status: Second Try (Intel Available)' 
                           : 'Status: Pending Verification'}
                       </span>
                       <div className="flex items-center gap-1.5">
@@ -1440,22 +1795,23 @@ export default function App() {
                         </button>
                         <button 
                           onClick={skipFlag}
+                          disabled={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1}
                           className={cn(
                             "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all group",
-                            (skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2
-                              ? "bg-red-950/40 border border-red-500/30 text-rose-400 hover:bg-red-900/40 hover:text-rose-300 animate-pulse"
-                              : "bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white"
+                            (skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1
+                              ? "bg-neutral-900 border border-neutral-800 text-neutral-600 cursor-not-allowed"
+                              : "bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white cursor-pointer"
                           )}
-                          title={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2 ? "Warning: Third skip ends the game!" : "Skip this flag"}
+                          title={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1 ? "No runs of evasion remain for this flag." : "Skip this flag"}
                         >
-                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2 ? "Fatal Skip" : "Skip"}</span>
+                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1 ? "Final Try" : "Skip"}</span>
                           <Shuffle className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" />
                         </button>
                       </div>
                    </div>
                 </motion.div>
 
-                    {currentTargetFlagId && (skippedFlagsCount[currentTargetFlagId] || 0) >= 2 && (
+                    {currentTargetFlagId && (skippedFlagsCount[currentTargetFlagId] || 0) >= 1 && (
                       <motion.div 
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
@@ -1463,7 +1819,7 @@ export default function App() {
                       >
                         <div className="text-[8.5px] font-mono text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
                           <Brain className="w-3.5 h-3.5 animate-pulse text-amber-500" />
-                          Intel Hint (2 Skips Recorded)
+                          Intel Hint (Second Chance)
                         </div>
                         <div className="space-y-1 font-mono text-[9px] text-neutral-300">
                           {(() => {
@@ -1473,17 +1829,7 @@ export default function App() {
                                 <div className="flex items-start gap-1">
                                   <span className="text-amber-500/70 font-bold text-[8px] shrink-0 uppercase">[CAPITAL]:</span> 
                                   {country?.capital ? (
-                                    <a 
-                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(country.capital + ", " + country.name)}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-white font-bold hover:text-emerald-400 hover:underline transition-colors inline-flex items-center gap-1 group/hint outline-none"
-                                      title={`Click to view ${country.capital} on Google Maps`}
-                                    >
-                                      <span>{country.capital}</span>
-                                      <ExternalLink className="w-2.5 h-2.5 text-neutral-500 group-hover/hint:text-emerald-400 transition-colors" />
-                                    </a>
+                                    <span className="text-white font-bold">{country.capital}</span>
                                   ) : (
                                     <span className="text-white font-bold">Unknown</span>
                                   )}
@@ -1491,7 +1837,7 @@ export default function App() {
                                 {country?.facts && country.facts.length > 0 && (
                                   <div className="leading-relaxed mt-1 flex items-start gap-1 text-neutral-400">
                                     <span className="text-amber-500/70 font-bold text-[8px] shrink-0 uppercase">[DOSSIER]:</span> 
-                                    {country.facts[0]}
+                                    <span>{sanitizeHintText(country.facts[0], country)}</span>
                                   </div>
                                 )}
                               </>
@@ -2165,13 +2511,14 @@ export default function App() {
               >
                 <WorldMap 
                   guessedIds={guessedIds} 
-                  highlightedId={lastGuessedId} 
+                  highlightedId={gameType === 'highlight' ? currentTargetHighlightId : lastGuessedId} 
                   isFinished={isFinished} 
                   focusedContinent={focusedContinent}
                   projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                   isMemoryMode={isMemoryMode}
                   isPaused={isPaused}
                   highlightedAllianceMemberIds={highlightedAllianceMemberIds}
+                  plotContinentsColorMode={plotContinentsColorMode}
                 />
               
                 {/* Interactive Overlays */}
@@ -2767,7 +3114,7 @@ export default function App() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-500">[CMD / CTRL] + [B]</span>
-                        <span className="text-emerald-500/80">Toggle Rotation</span>
+                        <span className="text-emerald-500/80">Rotation Speed Dial</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-neutral-500">[ALT] or [CMD] + [F8]</span>
@@ -2887,6 +3234,7 @@ export default function App() {
                       isMemoryMode={false}
                       isPaused={false}
                       highlightedAllianceMemberIds={highlightedAllianceMemberIds}
+                      plotContinentsColorMode={plotContinentsColorMode}
                     />
 
                     <button 
@@ -3527,14 +3875,34 @@ export default function App() {
                                 }
                                 if (isAll) return `${gIds.length}/${COUNTRIES.length}`;
                                 const total = COUNTRIES.filter(c => c.continent === cont).length;
-                                const guessed = gIds.filter(id => COUNTRIES.find(curr => curr.id === id)?.continent === cont).length;
-                                return `${guessed}/${total}`;
+                                  const guessed = gIds.filter(id => COUNTRIES.find(curr => curr.id === id)?.continent === cont).length;
+                                  return `${guessed}/${total}`;
                               })()}
                             </span>
                           </button>
                         );
                       });
                     })()}
+
+                    {/* Plot Continents Toggle */}
+                    {selectedContinentFilter !== null && (
+                      <button
+                        onClick={() => setPlotContinentsColorMode(!plotContinentsColorMode)}
+                        className={cn(
+                          "px-6 py-2.5 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-3 ml-auto cursor-pointer",
+                          plotContinentsColorMode
+                            ? "bg-amber-500 border-amber-500 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)]"
+                            : "bg-neutral-900/50 border-neutral-800 text-amber-500/70 hover:border-amber-500/30 hover:text-amber-400"
+                        )}
+                        title="Plot and Color All Continents on Map"
+                      >
+                        <Palette className="w-3.5 h-3.5" />
+                        <span>PLOT CONTINENTS</span>
+                        <span className="text-[8px] opacity-65 font-mono">
+                          {plotContinentsColorMode ? "ON" : "OFF"}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -4175,6 +4543,78 @@ export default function App() {
 
               <button 
                 onClick={() => setShowFlagQuantityPrompt(false)}
+                className="w-full py-2 text-neutral-600 hover:text-neutral-400 transition-colors font-black uppercase tracking-widest text-[9px]"
+              >
+                Abort Protocol
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Target Highlight Quantity Selection Prompt */}
+      <AnimatePresence>
+        {showHighlightQuantityPrompt && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[600] bg-black/95 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-[#121212] border border-neutral-800 p-8 rounded-[32px] shadow-2xl max-w-md w-full text-center space-y-8 relative overflow-hidden"
+            >
+              {/* Styling accents */}
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-amber-500/5 rounded-full blur-[60px]" />
+
+              <div className="space-y-3">
+                <div className="w-16 h-16 bg-amber-500/10 rounded-2xl flex items-center justify-center mx-auto text-amber-500 border border-amber-500/20 rotate-3">
+                  <Target className="w-8 h-8 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">TARGET ACQUISITION PROTOCOL</h3>
+                  <p className="text-neutral-500 text-[9px] font-mono uppercase tracking-[0.2em] font-bold">Select Active Targets for Guessing</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[5, 10, 20, 50, 100, 195].map((q) => {
+                  let badge = "TACTICAL";
+                  let color = "hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-400";
+                  if (q === 5) { badge = "SABER"; color = "hover:border-emerald-500/40 hover:bg-emerald-500/5 text-emerald-400"; }
+                  else if (q === 10) { badge = "STANDARD"; color = "hover:border-cyan-500/40 hover:bg-cyan-500/5 text-cyan-400"; }
+                  else if (q === 20) { badge = "ADVANCED"; color = "hover:border-blue-500/40 hover:bg-blue-500/5 text-blue-400"; }
+                  else if (q === 50) { badge = "INTENSE"; color = "hover:border-purple-500/40 hover:bg-purple-500/5 text-purple-400"; }
+                  else if (q === 100) { badge = "HARDCORE"; color = "hover:border-rose-500/40 hover:bg-rose-500/5 text-rose-400"; }
+                  else if (q === 195) { badge = "ALL GLOBE"; color = "hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-500"; }
+
+                  return (
+                    <button
+                      key={q}
+                      onClick={() => {
+                        setHighlightCountLimit(q);
+                        setShowHighlightQuantityPrompt(false);
+                        setGameType('highlight');
+                        startGame(selectedDuration, 'highlight', q);
+                      }}
+                      className={cn(
+                        "p-4 bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.98] group",
+                        color
+                      )}
+                    >
+                      <span className="text-2xl font-black font-mono leading-none">{q}</span>
+                      <span className="text-[8px] opacity-60 font-mono tracking-widest font-black uppercase">{badge}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button 
+                onClick={() => setShowHighlightQuantityPrompt(false)}
                 className="w-full py-2 text-neutral-600 hover:text-neutral-400 transition-colors font-black uppercase tracking-widest text-[9px]"
               >
                 Abort Protocol

@@ -4,6 +4,8 @@ import * as topojson from 'topojson-client';
 import { motion, AnimatePresence } from 'motion/react';
 import { CountryData } from '../types';
 import { COUNTRIES } from '../data/countries';
+import { cn } from '../lib/utils';
+import { Gauge, Play, Pause, X, Sliders } from 'lucide-react';
 
 interface WorldMapProps {
   guessedIds: Set<string>;
@@ -15,7 +17,28 @@ interface WorldMapProps {
   isMemoryMode?: boolean;
   isPaused?: boolean;
   highlightedAllianceMemberIds?: Set<string> | null;
+  plotContinentsColorMode?: boolean;
 }
+
+const CONTINENT_FILL_COLORS: Record<string, string> = {
+  'Africa': '#ea580c33', // orange-600 with opacity
+  'Asia': '#e11d4833', // rose-600 with opacity
+  'Europe': '#2563eb33', // blue-600 with opacity
+  'North America': '#05966933', // emerald-600 with opacity
+  'South America': '#d9770633', // amber-600 with opacity
+  'Oceania': '#0891b233', // cyan-600 with opacity
+  'Antarctica': '#38bdf822' // sky-400 with opacity
+};
+
+const CONTINENT_STROKE_COLORS: Record<string, string> = {
+  'Africa': '#ea580cbb', 
+  'Asia': '#e11da8bb', 
+  'Europe': '#2563ebbb', 
+  'North America': '#059669bb', 
+  'South America': '#d97706bb', 
+  'Oceania': '#0891b2bb', 
+  'Antarctica': '#38bdf899'
+};
 
 export function WorldMap({ 
   guessedIds, 
@@ -26,7 +49,8 @@ export function WorldMap({
   projectionType = 'mercator',
   isMemoryMode = false,
   isPaused = false,
-  highlightedAllianceMemberIds = null
+  highlightedAllianceMemberIds = null,
+  plotContinentsColorMode = false
 }: WorldMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,6 +62,15 @@ export function WorldMap({
   const highlightedIdRef = useRef(highlightedId);
   const isPausedRef = useRef(isPaused);
   const highlightedAllianceMemberIdsRef = useRef(highlightedAllianceMemberIds);
+  const plotContinentsColorModeRef = useRef(plotContinentsColorMode);
+
+  const countryContinentMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of COUNTRIES) {
+      map.set(String(c.id).padStart(3, '0'), c.continent);
+    }
+    return map;
+  }, []);
   const projectionRef = useRef<d3.GeoProjection | null>(null);
   const zoomListenerRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const rotationRef = useRef<[number, number, number]>([0, 0, 0]);
@@ -48,6 +81,14 @@ export function WorldMap({
   const dimensionsRef = useRef({ width: 0, height: 0 });
   const lastInteractionTimeRef = useRef(Date.now());
   const autoRotateRef = useRef(false);
+  const [showSpeedDial, setShowSpeedDial] = useState(false);
+  const [rotationSpeedFactor, setRotationSpeedFactor] = useState(1.0);
+  const rotationSpeedFactorRef = useRef(1.0);
+
+  const handleSpeedChange = (val: number) => {
+    setRotationSpeedFactor(val);
+    rotationSpeedFactorRef.current = val;
+  };
 
   useEffect(() => {
     isFinishedRef.current = isFinished;
@@ -74,6 +115,11 @@ export function WorldMap({
     if (mapLoaded) updateMapColors(true);
   }, [isPaused, mapLoaded]);
 
+  useEffect(() => {
+    plotContinentsColorModeRef.current = plotContinentsColorMode;
+    if (mapLoaded) updateMapColors(true);
+  }, [plotContinentsColorMode, mapLoaded]);
+
   const updateMapColors = (immediate = false) => {
     if (!gRef.current) return;
 
@@ -87,6 +133,13 @@ export function WorldMap({
         if (highlightedIdRef.current === id) {
           if (isPausedRef.current && isMemoryModeRef.current) return '#262626';
           return '#facc15';
+        }
+
+        if (plotContinentsColorModeRef.current) {
+          const continent = countryContinentMap.get(id);
+          if (continent && CONTINENT_FILL_COLORS[continent]) {
+            return CONTINENT_FILL_COLORS[continent];
+          }
         }
 
         if (highlightedAllianceMemberIdsRef.current && highlightedAllianceMemberIdsRef.current.has(id)) {
@@ -109,6 +162,13 @@ export function WorldMap({
         if (highlightedIdRef.current === id) {
           if (isPausedRef.current && isMemoryModeRef.current) return '#404040';
           return '#eab308';
+        }
+
+        if (plotContinentsColorModeRef.current) {
+          const continent = countryContinentMap.get(id);
+          if (continent && CONTINENT_STROKE_COLORS[continent]) {
+            return CONTINENT_STROKE_COLORS[continent];
+          }
         }
 
         if (highlightedAllianceMemberIdsRef.current && highlightedAllianceMemberIdsRef.current.has(id)) {
@@ -450,11 +510,11 @@ export function WorldMap({
       
       // Toggle rotation with Cmd+B or Ctrl+B - works even if typing
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
-        if (document.activeElement?.tagName !== 'INPUT') {
-          e.preventDefault();
-          autoRotateRef.current = !autoRotateRef.current;
-          return;
-        }
+        e.preventDefault();
+        setShowSpeedDial(prev => !prev);
+        // Ensure rotation is enabled when triggering the dial so they immediately see the response
+        autoRotateRef.current = true;
+        return;
       }
 
       if (document.activeElement?.tagName === 'INPUT') return;
@@ -519,7 +579,8 @@ export function WorldMap({
           activeKeys.current.size === 0 && 
           (autoRotateRef.current || Date.now() - lastInteractionTimeRef.current > 5000)) {
         const rotate = projectionRef.current.rotate();
-        const nextRotate: [number, number, number] = [rotate[0] + 0.015, rotate[1], rotate[2]];
+        const speed = 0.015 * rotationSpeedFactorRef.current;
+        const nextRotate: [number, number, number] = [rotate[0] + speed, rotate[1], rotate[2]];
         projectionRef.current.rotate(nextRotate);
         rotationRef.current = nextRotate;
         needsRefresh = true;
@@ -602,6 +663,22 @@ export function WorldMap({
   return (
     <div ref={containerRef} className="w-full h-full bg-[#171717] rounded-xl overflow-hidden shadow-inner border border-neutral-800 relative">
       <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      
+      {/* Floating Speed Instrument Trigger - Only visible in orthographic / globe mode */}
+      {projectionType === 'orthographic' && (
+        <div className="absolute top-3 left-3 z-[40]">
+          <button
+            onClick={() => setShowSpeedDial(p => !p)}
+            className="group flex items-center gap-2 px-3 py-1.5 bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-xl hover:bg-neutral-800 hover:border-emerald-500/40 text-neutral-300 hover:text-emerald-400 font-mono text-[9px] font-bold uppercase tracking-widest transition-all cursor-pointer shadow-lg"
+            title="Configure Globe Spin Rate (Shortcut: Cmd+B)"
+          >
+            <Gauge className={cn("w-3.5 h-3.5 text-neutral-400 group-hover:text-emerald-400", rotationSpeedFactor > 0 && "animate-[pulse_1.5s_ease-in-out_infinite]")} />
+            <span>Spin: {rotationSpeedFactor === 0 ? "FROZEN" : `${rotationSpeedFactor.toFixed(1)}x`}</span>
+            <span className="text-[7.5px] px-1 py-0.5 bg-neutral-800 rounded text-neutral-500 font-black border border-neutral-700/50">⌘B</span>
+          </button>
+        </div>
+      )}
+
       <AnimatePresence>
         {tooltip && (
           <motion.div 
@@ -612,6 +689,178 @@ export function WorldMap({
             className="z-[100] px-3 py-1.5 bg-white text-black text-xs font-bold rounded shadow-2xl border border-neutral-200 uppercase tracking-widest"
           >
             {tooltip.name}
+          </motion.div>
+        )}
+
+        {/* Rotational Speed Instrument Dial Panel */}
+        {projectionType === 'orthographic' && showSpeedDial && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            className="absolute top-3 left-3 z-50 min-w-[250px] bg-neutral-950/95 backdrop-blur-md border border-neutral-800/80 p-4 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col gap-3.5 font-mono text-white select-none"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-neutral-800/50 pb-2">
+              <div className="flex items-center gap-1.5">
+                <Gauge className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Rotational Speed</span>
+              </div>
+              <button 
+                onClick={() => setShowSpeedDial(false)}
+                className="text-neutral-500 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Tactile Circular Instrument Dial Indicator */}
+            <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                {/* Background arc loop representing max speed limits */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="transparent"
+                  stroke="#1c1c1c"
+                  strokeWidth="6"
+                  strokeDasharray="188 251"
+                  strokeLinecap="round"
+                />
+                {/* Active speed level arc tracking */}
+                <path
+                  d="M 50,10 A 40,40 0 1,1 49.9,10"
+                  fill="none"
+                  stroke={rotationSpeedFactor > 0 ? "#10b981" : "#444444"}
+                  strokeWidth="6"
+                  strokeDasharray={`${(rotationSpeedFactor / 5.0) * 188} 251`}
+                  strokeLinecap="round"
+                  className="transition-all duration-300 ease-out"
+                />
+                
+                {/* Visual ticks */}
+                {[0, 1.25, 2.5, 3.75, 5.0].map((tickVal, i) => {
+                  const tickAngle = -135 + (tickVal / 5.0) * 270;
+                  const rad = (tickAngle * Math.PI) / 180;
+                  const x1 = 50 + 33 * Math.cos(rad);
+                  const y1 = 50 + 33 * Math.sin(rad);
+                  const x2 = 50 + 37 * Math.cos(rad);
+                  const y2 = 50 + 37 * Math.sin(rad);
+                  return (
+                    <line
+                      key={i}
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke={rotationSpeedFactor >= tickVal ? "#10b981" : "#333"}
+                      strokeWidth="1.5"
+                    />
+                  );
+                })}
+              </svg>
+
+              {/* Central Glowing Tactile Knob */}
+              <div 
+                className="absolute w-16 h-16 bg-gradient-to-br from-neutral-800 to-neutral-900 border border-neutral-700 rounded-full shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)] flex flex-col items-center justify-center"
+                style={{
+                  transform: `rotate(${-135 + (rotationSpeedFactor / 5.0) * 270}deg)`,
+                  transition: 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                }}
+              >
+                {/* Knob Needle Indicator */}
+                <div className="absolute top-1 w-1 h-4 bg-emerald-400 rounded-full shadow-[0_0_8px_#10b981]" />
+                
+                <div className="absolute w-10 h-10 bg-neutral-950/60 rounded-full border border-neutral-800/80 flex items-center justify-center transform hover:scale-105 active:scale-95 transition-all">
+                  <span className="text-[10px] font-black text-emerald-400 tracking-tighter uppercase" style={{ transform: `rotate(-${-135 + (rotationSpeedFactor / 5.0) * 270}deg)` }}>
+                    {rotationSpeedFactor === 0 ? "OFF" : `${rotationSpeedFactor.toFixed(1)}`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Readout Details */}
+            <div className="flex flex-col gap-1 items-center justify-center bg-black/40 border border-neutral-900/60 rounded-lg p-2">
+              <div className="text-[10px] font-black tracking-widest text-[#10b981] text-center">
+                {rotationSpeedFactor === 0 ? "ROTATION FROZEN" : `ORBITAL FLIGHT RATE: ${rotationSpeedFactor.toFixed(2)}X`}
+              </div>
+              <div className="text-[7.5px] text-neutral-500 uppercase tracking-wider text-center">
+                Configure via sliders or preset increments
+              </div>
+            </div>
+
+            {/* Slider with Precision Multiplier & Pause controls */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  autoRotateRef.current = !autoRotateRef.current;
+                  // If we toggle auto-spin off, set speed factor visual state to zero temporarily or keep it so they can toggle back on
+                  // Let's force speed factor to 1.0 if autoRotate gets re-enabled but speed was 0
+                  if (autoRotateRef.current && rotationSpeedFactor === 0) {
+                    handleSpeedChange(1.0);
+                  }
+                }}
+                className={cn(
+                  "p-2 rounded-lg border flex items-center justify-center cursor-pointer transition-all",
+                  autoRotateRef.current && rotationSpeedFactor > 0
+                    ? "bg-emerald-950/30 border-emerald-500/20 text-emerald-400 hover:bg-emerald-900/30"
+                    : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-white"
+                )}
+                title={autoRotateRef.current ? "Freeze Auto-rotation" : "Activate Auto-rotation"}
+              >
+                {autoRotateRef.current && rotationSpeedFactor > 0 ? (
+                  <Pause className="w-4 h-4" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+              </button>
+
+              <div className="flex-1 relative flex items-center">
+                <input
+                  type="range"
+                  min="0"
+                  max="5"
+                  step="0.05"
+                  value={rotationSpeedFactor}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    handleSpeedChange(val);
+                    if (val > 0) autoRotateRef.current = true;
+                  }}
+                  className="w-full accent-emerald-500 h-1 bg-neutral-800 rounded-lg cursor-pointer appearance-none outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Fast Presets Tactile Buttons */}
+            <div className="grid grid-cols-5 gap-1 pt-1 border-t border-neutral-800/40">
+              {[
+                { label: "0x", val: 0.0, desc: "Freeze Dial" },
+                { label: "0.5x", val: 0.5, desc: "Slow Orbit" },
+                { label: "1.0x", val: 1.0, desc: "Standard Cruising" },
+                { label: "2.5x", val: 2.5, desc: "High Orbit" },
+                { label: "5.0x", val: 5.0, desc: "Hyper Warp" }
+              ].map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    handleSpeedChange(p.val);
+                    if (p.val > 0) autoRotateRef.current = true;
+                    else autoRotateRef.current = false;
+                  }}
+                  className={cn(
+                    "py-1 text-[8px] font-bold rounded border transition-all cursor-pointer uppercase text-center",
+                    rotationSpeedFactor === p.val
+                      ? "bg-emerald-500 text-black border-emerald-400 font-extrabold shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                      : "bg-neutral-900 border-neutral-800/60 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                  )}
+                  title={p.desc}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
