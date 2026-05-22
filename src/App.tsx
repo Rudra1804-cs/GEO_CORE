@@ -2524,6 +2524,7 @@ export default function App() {
                   isPaused={isPaused}
                   highlightedAllianceMemberIds={highlightedAllianceMemberIds}
                   plotContinentsColorMode={plotContinentsColorMode}
+                  gameType={gameType}
                 />
               
                 {/* Interactive Overlays */}

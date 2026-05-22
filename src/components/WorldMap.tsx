@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CountryData } from '../types';
 import { COUNTRIES } from '../data/countries';
 import { cn } from '../lib/utils';
-import { Gauge, Play, Pause, X, Sliders } from 'lucide-react';
+import { Gauge, Play, Pause, X, Sliders, Map as MapIcon } from 'lucide-react';
 
 interface WorldMapProps {
   guessedIds: Set<string>;
@@ -18,6 +18,7 @@ interface WorldMapProps {
   isPaused?: boolean;
   highlightedAllianceMemberIds?: Set<string> | null;
   plotContinentsColorMode?: boolean;
+  gameType?: 'typing' | 'flag' | 'highlight';
 }
 
 const CONTINENT_FILL_COLORS: Record<string, string> = {
@@ -50,7 +51,8 @@ export function WorldMap({
   isMemoryMode = false,
   isPaused = false,
   highlightedAllianceMemberIds = null,
-  plotContinentsColorMode = false
+  plotContinentsColorMode = false,
+  gameType
 }: WorldMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,6 +86,10 @@ export function WorldMap({
   const [showSpeedDial, setShowSpeedDial] = useState(false);
   const [rotationSpeedFactor, setRotationSpeedFactor] = useState(1.0);
   const rotationSpeedFactorRef = useRef(1.0);
+  const [forceCenterTrigger, setForceCenterTrigger] = useState(0);
+  const manualPanTriggeredRef = useRef(false);
+  const [autoPanEnabled, setAutoPanEnabled] = useState(false);
+  const isCenteringRef = useRef(false);
 
   const handleSpeedChange = (val: number) => {
     setRotationSpeedFactor(val);
@@ -114,6 +120,12 @@ export function WorldMap({
     isPausedRef.current = isPaused;
     if (mapLoaded) updateMapColors(true);
   }, [isPaused, mapLoaded]);
+
+  useEffect(() => {
+    if (projectionType !== 'orthographic') {
+      setShowSpeedDial(false);
+    }
+  }, [projectionType]);
 
   useEffect(() => {
     plotContinentsColorModeRef.current = plotContinentsColorMode;
@@ -511,9 +523,11 @@ export function WorldMap({
       // Toggle rotation with Cmd+B or Ctrl+B - works even if typing
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
-        setShowSpeedDial(prev => !prev);
-        // Ensure rotation is enabled when triggering the dial so they immediately see the response
-        autoRotateRef.current = true;
+        if (projectionType === 'orthographic') {
+          setShowSpeedDial(prev => !prev);
+          // Ensure rotation is enabled when triggering the dial so they immediately see the response
+          autoRotateRef.current = true;
+        }
         return;
       }
 
@@ -576,6 +590,7 @@ export function WorldMap({
       if (projectionType === 'orthographic' && 
           projectionRef.current && 
           !isPausedRef.current && 
+          !isCenteringRef.current && 
           activeKeys.current.size === 0 && 
           (autoRotateRef.current || Date.now() - lastInteractionTimeRef.current > 5000)) {
         const rotate = projectionRef.current.rotate();
@@ -616,6 +631,13 @@ export function WorldMap({
   useEffect(() => {
     if (!mapLoaded || projectionType !== 'orthographic' || !highlightedId || isFinished || !gRef.current || !projectionRef.current || !containerRef.current) return;
     
+    // Skip automatic focus during typing/flag modes unless triggered manual pan explicitly OR auto-panning is enabled in selection deck
+    const isPlayingGameType = gameType === 'typing' || gameType === 'flag';
+    if (isPlayingGameType && !manualPanTriggeredRef.current && !autoPanEnabled) {
+      return;
+    }
+    manualPanTriggeredRef.current = false;
+    
     // Find target coordinates (prioritize capital city coords, fallback to geoCentroid)
     let targetCoords: [number, number] | null = null;
     const country = COUNTRIES.find(c => c.id === highlightedId);
@@ -633,7 +655,7 @@ export function WorldMap({
           }
         } catch (e) {
           // ignore centroid error
-        }
+         }
       }
     }
 
@@ -642,12 +664,14 @@ export function WorldMap({
       const proj = projectionRef.current;
       const path = d3.geoPath().projection(proj);
 
-      // Disable auto-rotate and record last interaction time to avoid immediate spin action
+      // Disable auto-rotate temporarily and set the state
       lastInteractionTimeRef.current = Date.now();
+      isCenteringRef.current = true;
 
-      // Use d3 transition to smoothly rotate to [-lng, -lat]
+      // Use d3 transition to smoothly rotate to [-lng, -lat] with a slight southward shift to keep the target country up and show the south part more.
       const startRotation = proj.rotate();
-      const endRotation: [number, number, number] = [-targetCoords[0], -targetCoords[1], 0];
+      const targetLat = Math.max(-65, Math.min(65, targetCoords[1] - 8));
+      const endRotation: [number, number, number] = [-targetCoords[0], -targetLat, 0];
 
       // Standardize the shortest rotation path
       let diffLng = endRotation[0] - startRotation[0];
@@ -665,12 +689,18 @@ export function WorldMap({
       const baseScale = Math.min(width, height) / 2.5;
       const startScale = proj.scale();
 
-      d3.transition()
-        .duration(1500)
+      // Determine target focus scale. Avoid zooming too close so users can observe surrounding regions.
+      // Zoom nicely to / 2.0 instead of / 1.5 to provide a comfortable, wide-spotlight overview.
+      const targetScale = startScale > (Math.min(width, height) / 2.0)
+        ? startScale
+        : (Math.min(width, height) / 2.0);
+
+      d3.transition("globe-panning-transition")
+        .duration(1200)
         .ease(d3.easeCubicInOut)
         .tween("globe-rotate", () => {
           const r = d3.interpolate(startRotation, shortPathEndRotation);
-          const s = d3.interpolate(startScale, baseScale);
+          const s = d3.interpolate(startScale, targetScale);
           return (t) => {
             lastInteractionTimeRef.current = Date.now();
             const currentRotation = r(t) as [number, number, number];
@@ -683,10 +713,18 @@ export function WorldMap({
           };
         })
         .on("end", () => {
+          isCenteringRef.current = false;
+          if (svgRef.current && zoomListenerRef.current) {
+            const finalK = targetScale / baseScale;
+            d3.select(svgRef.current).call(zoomListenerRef.current.transform, d3.zoomIdentity.scale(finalK));
+          }
           updateMapColors(true);
+        })
+        .on("interrupt", () => {
+          isCenteringRef.current = false;
         });
     }
-  }, [highlightedId, projectionType, mapLoaded, isFinished]);
+  }, [highlightedId, projectionType, mapLoaded, isFinished, forceCenterTrigger, autoPanEnabled]);
 
   useEffect(() => {
     if (!mapLoaded || !gRef.current || !countriesDataRef.current || !containerRef.current || !svgRef.current) return;
@@ -740,13 +778,13 @@ export function WorldMap({
     <div ref={containerRef} className="w-full h-full bg-[#171717] rounded-xl overflow-hidden shadow-inner border border-neutral-800 relative">
       <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
       
-      {/* Floating Speed Instrument Trigger - Only visible in orthographic / globe mode */}
+      {/* Floating Speed Instrument Trigger - Show only in orthographic/globe mode */}
       {projectionType === 'orthographic' && (
         <div className="absolute top-3 left-3 z-[40]">
           <button
             onClick={() => setShowSpeedDial(p => !p)}
-            className="group flex items-center gap-2 px-3 py-1.5 bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-xl hover:bg-neutral-800 hover:border-emerald-500/40 text-neutral-300 hover:text-emerald-400 font-mono text-[9px] font-bold uppercase tracking-widest transition-all cursor-pointer shadow-lg"
-            title="Configure Globe Spin Rate (Shortcut: Cmd+B)"
+            className="group flex items-center gap-2 px-3 py-1.5 bg-neutral-900/90 backdrop-blur-md border border-neutral-800 rounded-xl hover:bg-neutral-800 hover:border-emerald-500/40 text-neutral-300 hover:text-emerald-400 font-mono text-[9px] font-bold uppercase tracking-widest transition-all cursor-pointer shadow-lg animate-fade-in"
+            title="Configure Globe Spin Rate & Navigation (Shortcut: Cmd+B)"
           >
             <Gauge className={cn("w-3.5 h-3.5 text-neutral-400 group-hover:text-emerald-400", rotationSpeedFactor > 0 && "animate-[pulse_1.5s_ease-in-out_infinite]")} />
             <span>Spin: {rotationSpeedFactor === 0 ? "FROZEN" : `${rotationSpeedFactor.toFixed(1)}x`}</span>
@@ -768,8 +806,8 @@ export function WorldMap({
           </motion.div>
         )}
 
-        {/* Rotational Speed Instrument Dial Panel */}
-        {projectionType === 'orthographic' && showSpeedDial && (
+        {/* Tactical Surveillance Navigation & Map Control Deck Panel */}
+        {showSpeedDial && projectionType === 'orthographic' && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -779,164 +817,217 @@ export function WorldMap({
             {/* Header */}
             <div className="flex items-center justify-between border-b border-neutral-800/50 pb-2">
               <div className="flex items-center gap-1.5">
-                <Gauge className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Rotational Speed</span>
+                <Sliders className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Surveillance Panel</span>
               </div>
               <button 
                 onClick={() => setShowSpeedDial(false)}
                 className="text-neutral-500 hover:text-white transition-colors cursor-pointer"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3.5 h-3.5 opacity-60 hover:opacity-100" />
               </button>
             </div>
 
-            {/* Tactile Circular Instrument Dial Indicator */}
-            <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                {/* Background arc loop representing max speed limits */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  fill="transparent"
-                  stroke="#1c1c1c"
-                  strokeWidth="6"
-                  strokeDasharray="188 251"
-                  strokeLinecap="round"
-                />
-                {/* Active speed level arc tracking */}
-                <path
-                  d="M 50,10 A 40,40 0 1,1 49.9,10"
-                  fill="none"
-                  stroke={rotationSpeedFactor > 0 ? "#10b981" : "#444444"}
-                  strokeWidth="6"
-                  strokeDasharray={`${(rotationSpeedFactor / 5.0) * 188} 251`}
-                  strokeLinecap="round"
-                  className="transition-all duration-300 ease-out"
-                />
-                
-                {/* Visual ticks */}
-                {[0, 1.25, 2.5, 3.75, 5.0].map((tickVal, i) => {
-                  const tickAngle = -135 + (tickVal / 5.0) * 270;
-                  const rad = (tickAngle * Math.PI) / 180;
-                  const x1 = 50 + 33 * Math.cos(rad);
-                  const y1 = 50 + 33 * Math.sin(rad);
-                  const x2 = 50 + 37 * Math.cos(rad);
-                  const y2 = 50 + 37 * Math.sin(rad);
-                  return (
-                    <line
-                      key={i}
-                      x1={x1}
-                      y1={y1}
-                      x2={x2}
-                      y2={y2}
-                      stroke={rotationSpeedFactor >= tickVal ? "#10b981" : "#333"}
-                      strokeWidth="1.5"
+             {/* Tactical Panning Options Section */}
+             <div className="flex flex-col gap-2 p-2.5 bg-neutral-900/50 border border-neutral-800/40 rounded-lg">
+               <div className="flex items-center justify-between pb-1.5 border-b border-neutral-800/30">
+                 <span className="text-[8px] text-neutral-500 uppercase tracking-widest font-black">Auto-Panning (Type/Flag)</span>
+                 <button
+                   onClick={() => setAutoPanEnabled(!autoPanEnabled)}
+                   className={cn(
+                     "text-[8px] font-mono px-2 py-0.5 rounded transition-all uppercase border font-bold cursor-pointer",
+                     autoPanEnabled 
+                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_6px_rgba(16,185,129,0.15)]"
+                       : "bg-neutral-950/40 text-neutral-500 border-neutral-850"
+                   )}
+                 >
+                   {autoPanEnabled ? "ENABLED" : "DISABLED"}
+                 </button>
+               </div>
+
+               {highlightedId ? (
+                 (() => {
+                   const country = COUNTRIES.find(c => c.id === highlightedId);
+                   return (
+                     <div className="flex flex-col gap-1.5 mt-0.5">
+                       <div className="text-[8px] text-neutral-500 uppercase tracking-widest mb-0.5">Active Target</div>
+                       <div className="flex items-center justify-between text-xs font-bold text-neutral-200">
+                         <span className="truncate max-w-[150px]">{country?.name || 'Unknown'}</span>
+                         <span className="text-[8px] font-mono text-emerald-400 px-1 py-0.5 bg-emerald-950/50 rounded uppercase border border-emerald-500/20">Active</span>
+                       </div>
+                       
+                       <button
+                         onClick={() => {
+                           manualPanTriggeredRef.current = true;
+                           setForceCenterTrigger(prev => prev + 1);
+                           setShowSpeedDial(false);
+                         }}
+                         className="mt-1 w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 border border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)] cursor-pointer"
+                       >
+                         <MapIcon className="w-3 h-3" />
+                         Pan to Country
+                       </button>
+                     </div>
+                   );
+                 })()
+               ) : (
+                 <div className="flex flex-col items-center justify-center border border-neutral-800/25 border-dashed rounded-lg p-2.5 text-neutral-600 text-center text-[8px] font-mono">
+                   <div>NO PAN TARGET ACTIVE</div>
+                   <div className="mt-0.5 opacity-75">Identify a country first to activate manual coordinates.</div>
+                 </div>
+               )}
+             </div>
+
+            {/* Rotational controls - Only shown in orthographic/globe projection */}
+            {projectionType === 'orthographic' && (
+              <>
+                {/* Tactile Circular Instrument Dial Indicator */}
+                <div className="relative w-28 h-28 mx-auto flex items-center justify-center">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    {/* Background arc loop representing max speed limits */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="transparent"
+                      stroke="#1c1c1c"
+                      strokeWidth="6"
+                      strokeDasharray="188 251"
+                      strokeLinecap="round"
                     />
-                  );
-                })}
-              </svg>
+                    {/* Active speed level arc tracking */}
+                    <path
+                      d="M 50,10 A 40,40 0 1,1 49.9,10"
+                      fill="none"
+                      stroke={rotationSpeedFactor > 0 ? "#10b981" : "#444444"}
+                      strokeWidth="6"
+                      strokeDasharray={`${(rotationSpeedFactor / 5.0) * 188} 251`}
+                      strokeLinecap="round"
+                      className="transition-all duration-300 ease-out"
+                    />
+                    
+                    {/* Visual ticks */}
+                    {[0, 1.25, 2.5, 3.75, 5.0].map((tickVal, i) => {
+                      const tickAngle = -135 + (tickVal / 5.0) * 270;
+                      const rad = (tickAngle * Math.PI) / 180;
+                      const x1 = 50 + 33 * Math.cos(rad);
+                      const y1 = 50 + 33 * Math.sin(rad);
+                      const x2 = 50 + 37 * Math.cos(rad);
+                      const y2 = 50 + 37 * Math.sin(rad);
+                      return (
+                        <line
+                          key={i}
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke={rotationSpeedFactor >= tickVal ? "#10b981" : "#333"}
+                          strokeWidth="1.5"
+                        />
+                      );
+                    })}
+                  </svg>
 
-              {/* Central Glowing Tactile Knob */}
-              <div 
-                className="absolute w-16 h-16 bg-gradient-to-br from-neutral-800 to-neutral-900 border border-neutral-700 rounded-full shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)] flex flex-col items-center justify-center"
-                style={{
-                  transform: `rotate(${-135 + (rotationSpeedFactor / 5.0) * 270}deg)`,
-                  transition: 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)'
-                }}
-              >
-                {/* Knob Needle Indicator */}
-                <div className="absolute top-1 w-1 h-4 bg-emerald-400 rounded-full shadow-[0_0_8px_#10b981]" />
-                
-                <div className="absolute w-10 h-10 bg-neutral-950/60 rounded-full border border-neutral-800/80 flex items-center justify-center transform hover:scale-105 active:scale-95 transition-all">
-                  <span className="text-[10px] font-black text-emerald-400 tracking-tighter uppercase" style={{ transform: `rotate(-${-135 + (rotationSpeedFactor / 5.0) * 270}deg)` }}>
-                    {rotationSpeedFactor === 0 ? "OFF" : `${rotationSpeedFactor.toFixed(1)}`}
-                  </span>
+                  {/* Central Glowing Tactile Knob */}
+                  <div 
+                    className="absolute w-16 h-16 bg-gradient-to-br from-neutral-800 to-neutral-900 border border-neutral-700 rounded-full shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)] flex flex-col items-center justify-center"
+                    style={{
+                      transform: `rotate(${-135 + (rotationSpeedFactor / 5.0) * 270}deg)`,
+                      transition: 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                    }}
+                  >
+                    {/* Knob Needle Indicator */}
+                    <div className="absolute top-1 w-1 h-4 bg-emerald-400 rounded-full shadow-[0_0_8px_#10b981]" />
+                    
+                    <div className="absolute w-10 h-10 bg-neutral-950/60 rounded-full border border-neutral-800/80 flex items-center justify-center transform hover:scale-105 active:scale-95 transition-all">
+                      <span className="text-[10px] font-black text-emerald-400 tracking-tighter uppercase" style={{ transform: `rotate(-${-135 + (rotationSpeedFactor / 5.0) * 270}deg)` }}>
+                        {rotationSpeedFactor === 0 ? "OFF" : `${rotationSpeedFactor.toFixed(1)}`}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Readout Details */}
-            <div className="flex flex-col gap-1 items-center justify-center bg-black/40 border border-neutral-900/60 rounded-lg p-2">
-              <div className="text-[10px] font-black tracking-widest text-[#10b981] text-center">
-                {rotationSpeedFactor === 0 ? "ROTATION FROZEN" : `ORBITAL FLIGHT RATE: ${rotationSpeedFactor.toFixed(2)}X`}
-              </div>
-              <div className="text-[7.5px] text-neutral-500 uppercase tracking-wider text-center">
-                Configure via sliders or preset increments
-              </div>
-            </div>
+                {/* Readout Details */}
+                <div className="flex flex-col gap-1 items-center justify-center bg-black/40 border border-neutral-900/60 rounded-lg p-2">
+                  <div className="text-[10px] font-black tracking-widest text-[#10b981] text-center font-bold">
+                    {rotationSpeedFactor === 0 ? "ROTATION FROZEN" : `ORBITAL FLIGHT RATE: ${rotationSpeedFactor.toFixed(2)}X`}
+                  </div>
+                  <div className="text-[7.5px] text-neutral-500 uppercase tracking-wider text-center">
+                    Configure via sliders or preset increments
+                  </div>
+                </div>
 
-            {/* Slider with Precision Multiplier & Pause controls */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  autoRotateRef.current = !autoRotateRef.current;
-                  // If we toggle auto-spin off, set speed factor visual state to zero temporarily or keep it so they can toggle back on
-                  // Let's force speed factor to 1.0 if autoRotate gets re-enabled but speed was 0
-                  if (autoRotateRef.current && rotationSpeedFactor === 0) {
-                    handleSpeedChange(1.0);
-                  }
-                }}
-                className={cn(
-                  "p-2 rounded-lg border flex items-center justify-center cursor-pointer transition-all",
-                  autoRotateRef.current && rotationSpeedFactor > 0
-                    ? "bg-emerald-950/30 border-emerald-500/20 text-emerald-400 hover:bg-emerald-900/30"
-                    : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-white"
-                )}
-                title={autoRotateRef.current ? "Freeze Auto-rotation" : "Activate Auto-rotation"}
-              >
-                {autoRotateRef.current && rotationSpeedFactor > 0 ? (
-                  <Pause className="w-4 h-4" />
-                ) : (
-                  <Play className="w-4 h-4" />
-                )}
-              </button>
+                {/* Slider with Precision Multiplier & Pause controls */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      autoRotateRef.current = !autoRotateRef.current;
+                      if (autoRotateRef.current && rotationSpeedFactor === 0) {
+                        handleSpeedChange(1.0);
+                      }
+                    }}
+                    className={cn(
+                      "p-2 rounded-lg border flex items-center justify-center cursor-pointer transition-all",
+                      autoRotateRef.current && rotationSpeedFactor > 0
+                        ? "bg-emerald-950/30 border-emerald-500/20 text-emerald-400 hover:bg-emerald-900/30"
+                        : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-white"
+                    )}
+                    title={autoRotateRef.current ? "Freeze Auto-rotation" : "Activate Auto-rotation"}
+                  >
+                    {autoRotateRef.current && rotationSpeedFactor > 0 ? (
+                      <Pause className="w-4 h-4" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
+                  </button>
 
-              <div className="flex-1 relative flex items-center">
-                <input
-                  type="range"
-                  min="0"
-                  max="5"
-                  step="0.05"
-                  value={rotationSpeedFactor}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    handleSpeedChange(val);
-                    if (val > 0) autoRotateRef.current = true;
-                  }}
-                  className="w-full accent-emerald-500 h-1 bg-neutral-800 rounded-lg cursor-pointer appearance-none outline-none"
-                />
-              </div>
-            </div>
+                  <div className="flex-1 relative flex items-center">
+                    <input
+                      type="range"
+                      min="0"
+                      max="5"
+                      step="0.05"
+                      value={rotationSpeedFactor}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        handleSpeedChange(val);
+                        if (val > 0) autoRotateRef.current = true;
+                      }}
+                      className="w-full accent-emerald-500 h-1 bg-neutral-800 rounded-lg cursor-pointer appearance-none outline-none"
+                    />
+                  </div>
+                </div>
 
-            {/* Fast Presets Tactile Buttons */}
-            <div className="grid grid-cols-5 gap-1 pt-1 border-t border-neutral-800/40">
-              {[
-                { label: "0x", val: 0.0, desc: "Freeze Dial" },
-                { label: "0.5x", val: 0.5, desc: "Slow Orbit" },
-                { label: "1.0x", val: 1.0, desc: "Standard Cruising" },
-                { label: "2.5x", val: 2.5, desc: "High Orbit" },
-                { label: "5.0x", val: 5.0, desc: "Hyper Warp" }
-              ].map((p, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    handleSpeedChange(p.val);
-                    if (p.val > 0) autoRotateRef.current = true;
-                    else autoRotateRef.current = false;
-                  }}
-                  className={cn(
-                    "py-1 text-[8px] font-bold rounded border transition-all cursor-pointer uppercase text-center",
-                    rotationSpeedFactor === p.val
-                      ? "bg-emerald-500 text-black border-emerald-400 font-extrabold shadow-[0_0_8px_rgba(16,185,129,0.4)]"
-                      : "bg-neutral-900 border-neutral-800/60 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                  )}
-                  title={p.desc}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+                {/* Fast Presets Tactile Buttons */}
+                <div className="grid grid-cols-5 gap-1 pt-1 border-t border-neutral-800/40">
+                  {[
+                    { label: "0x", val: 0.0, desc: "Freeze Dial" },
+                    { label: "0.5x", val: 0.5, desc: "Slow Orbit" },
+                    { label: "1.0x", val: 1.0, desc: "Standard Cruising" },
+                    { label: "2.5x", val: 2.5, desc: "High Orbit" },
+                    { label: "5.0x", val: 5.0, desc: "Hyper Warp" }
+                  ].map((p, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        handleSpeedChange(p.val);
+                        if (p.val > 0) autoRotateRef.current = true;
+                        else autoRotateRef.current = false;
+                      }}
+                      className={cn(
+                        "py-1 text-[8px] font-bold rounded border transition-all cursor-pointer uppercase text-center",
+                        rotationSpeedFactor === p.val
+                          ? "bg-emerald-500 text-black border-emerald-400 font-extrabold shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                          : "bg-neutral-900 border-neutral-800/60 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                      )}
+                      title={p.desc}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
