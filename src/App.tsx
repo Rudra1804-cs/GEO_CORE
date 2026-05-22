@@ -11,6 +11,7 @@ import {
   Trophy, 
   Search, 
   ArrowRight, 
+  ArrowLeft,
   CheckCircle2, 
   XCircle,
   Edit2,
@@ -38,10 +39,21 @@ import {
   Target,
   Keyboard,
   ExternalLink,
-  Palette
+  Palette,
+  Sprout,
+  Pickaxe,
+  Zap,
+  Cpu,
+  Users,
+  Newspaper,
+  ShieldAlert,
+  Coins,
+  Sparkles,
+  Radio
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { WorldMap } from './components/WorldMap';
+import { NEWS_HOTSPOTS } from './data/news';
 import { CountryData } from './types';
 import { cn } from './lib/utils';
 import { auth, db } from './lib/firebase';
@@ -362,7 +374,40 @@ export default function App() {
   const [showExpandedDetail, setShowExpandedDetail] = useState(false);
   const [selectedExpandedCountryId, setSelectedExpandedCountryId] = useState<string | null>(null);
   const [selectedAllianceName, setSelectedAllianceName] = useState<string | null>(null);
-  const [expansionPanelTab, setExpansionPanelTab] = useState<'countries' | 'alliances'>('countries');
+  const [expansionPanelTab, setExpansionPanelTab] = useState<'countries' | 'alliances' | 'resources' | 'news'>('countries');
+  const [activeNewsId, setActiveNewsId] = useState<string | null>(null);
+  const [newsCategoryFilter, setNewsCategoryFilter] = useState<'all' | 'economic' | 'political' | 'tech' | 'finance'>('all');
+  const [newsSearchFilter, setNewsSearchFilter] = useState('');
+  const [newsPinOnly, setNewsPinOnly] = useState<boolean>(true);
+  const [selectedCityName, setSelectedCityName] = useState<string | null>(null);
+  const [cityNews, setCityNews] = useState<any[]>([]);
+  const [isCityNewsLoading, setIsCityNewsLoading] = useState<boolean>(false);
+  const [cityNewsError, setCityNewsError] = useState<string | null>(null);
+
+  const fetchLiveCityNews = async (cityName: string) => {
+    setSelectedCityName(cityName);
+    setIsCityNewsLoading(true);
+    setCityNewsError(null);
+    setCityNews([]);
+    try {
+      const resp = await fetch(`/api/news/search?q=${encodeURIComponent(cityName)}`);
+      if (!resp.ok) {
+        throw new Error(`Wire feed replied with status ${resp.status}`);
+      }
+      const data = await resp.json();
+      if (data.items) {
+        setCityNews(data.items);
+      } else {
+        setCityNews([]);
+      }
+    } catch (err: any) {
+      console.error("Live city news tracking failed:", err);
+      setCityNewsError(err.message || "Failed to intercept live city streams");
+    } finally {
+      setIsCityNewsLoading(false);
+    }
+  };
+
   const [isAllianceHighlighted, setIsAllianceHighlighted] = useState(false);
   const [allianceFlagRefreshKey, setAllianceFlagRefreshKey] = useState(0);
   const [isAllianceFlagRefreshing, setIsAllianceFlagRefreshing] = useState(false);
@@ -3235,6 +3280,20 @@ export default function App() {
                       isPaused={false}
                       highlightedAllianceMemberIds={highlightedAllianceMemberIds}
                       plotContinentsColorMode={plotContinentsColorMode}
+                      newsMode={expansionPanelTab === 'news'}
+                      activeNewsId={activeNewsId}
+                      onNewsPointClick={(newsId) => {
+                        setActiveNewsId(newsId);
+                        setIsTerritorialPanelCollapsed(false);
+                      }}
+                      onCityClick={(cityName, _code, countryId) => {
+                        setExpansionPanelTab('news');
+                        setIsTerritorialPanelCollapsed(false);
+                        if (countryId) {
+                          setSelectedExpandedCountryId(countryId);
+                        }
+                        fetchLiveCityNews(cityName);
+                      }}
                     />
 
                     <button 
@@ -3845,7 +3904,7 @@ export default function App() {
 
                   <div className="flex flex-wrap gap-2 shrink-0">
                     {(() => {
-                      const continents = Object.keys(CONTINENT_STATS);
+                      const continents = Object.keys(CONTINENT_STATS).filter(c => c !== 'Antarctica');
                       const items = ["All", ...continents];
                       return items.map(cont => {
                         const isAll = cont === 'All';
@@ -3883,26 +3942,6 @@ export default function App() {
                         );
                       });
                     })()}
-
-                    {/* Plot Continents Toggle */}
-                    {selectedContinentFilter !== null && (
-                      <button
-                        onClick={() => setPlotContinentsColorMode(!plotContinentsColorMode)}
-                        className={cn(
-                          "px-6 py-2.5 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-3 ml-auto cursor-pointer",
-                          plotContinentsColorMode
-                            ? "bg-amber-500 border-amber-500 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)]"
-                            : "bg-neutral-900/50 border-neutral-800 text-amber-500/70 hover:border-amber-500/30 hover:text-amber-400"
-                        )}
-                        title="Plot and Color All Continents on Map"
-                      >
-                        <Palette className="w-3.5 h-3.5" />
-                        <span>PLOT CONTINENTS</span>
-                        <span className="text-[8px] opacity-65 font-mono">
-                          {plotContinentsColorMode ? "ON" : "OFF"}
-                        </span>
-                      </button>
-                    )}
                   </div>
                 </div>
 
@@ -3917,7 +3956,7 @@ export default function App() {
                   className="flex flex-col gap-4 shrink-0 overflow-hidden"
                 >
                   {/* Tab Selector */}
-                  <div className="grid grid-cols-2 p-1 bg-neutral-900/60 border border-neutral-800 rounded-xl shrink-0 font-mono">
+                  <div className="grid grid-cols-4 p-1 bg-neutral-900/60 border border-neutral-800 rounded-xl shrink-0 font-mono">
                     <button
                       onClick={() => setExpansionPanelTab('countries')}
                       className={cn(
@@ -3941,9 +3980,33 @@ export default function App() {
                       <Globe className="w-3 h-3" />
                       Alliances
                     </button>
+                    <button
+                      onClick={() => setExpansionPanelTab('resources')}
+                      className={cn(
+                        "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5",
+                        expansionPanelTab === 'resources'
+                          ? "bg-emerald-500 text-black shadow-md font-bold"
+                          : "text-neutral-400 hover:text-white"
+                      )}
+                    >
+                      <Zap className="w-3 h-3" />
+                      Res
+                    </button>
+                    <button
+                      onClick={() => setExpansionPanelTab('news')}
+                      className={cn(
+                        "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5",
+                        expansionPanelTab === 'news'
+                          ? "bg-emerald-500 text-black shadow-md font-bold"
+                          : "text-neutral-400 hover:text-white"
+                      )}
+                    >
+                      <Newspaper className="w-3 h-3" />
+                      News
+                    </button>
                   </div>
 
-                  {expansionPanelTab === 'countries' ? (
+                  {expansionPanelTab === 'countries' && (
                     <>
                       <div className="grid grid-cols-1 gap-4 shrink-0">
                         {(() => {
@@ -4169,7 +4232,9 @@ export default function App() {
                         </div>
                       </div>
                     </>
-                  ) : (
+                  )}
+
+                  {expansionPanelTab === 'alliances' && (
                     <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
                       <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
                         <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2 animate-pulse">
@@ -4278,6 +4343,742 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {expansionPanelTab === 'resources' && (() => {
+                    const guessedIds = viewingRecord?.guessedIds || [];
+                    const activeContinent = selectedContinentFilter;
+                    
+                    const allCountriesFiltered = activeContinent 
+                      ? COUNTRIES.filter(c => c.continent === activeContinent) 
+                      : COUNTRIES;
+                    const securedCountriesFiltered = allCountriesFiltered.filter(c => guessedIds.includes(c.id));
+
+                    // Dynamic deterministic generator per country
+                    const getRes = (c: typeof COUNTRIES[0]) => {
+                      const codeVal = (c.code || "xx").charCodeAt(0) + (c.code || "xx").charCodeAt(1);
+                      const gdpVal = (c.gdp || 0) / 1000; // in Billions USD
+                      const areaVal = (c.area || 0) / 1000; // in Thousands sq km
+
+                      // Agriculture: Earth/Arable (based on area & latitude multiplier)
+                      const lat = c.capitalCoords?.lat ?? 30;
+                      const latMultiplier = Math.max(0.4, Math.min(1.4, 1.2 - Math.abs(lat) / 90));
+                      const agriculture = areaVal * 0.12 * latMultiplier;
+
+                      // Metals & Critical Minerals: Ore/Mining (based on geological area size + hash multiplier)
+                      const mineralsMultiplier = ((codeVal % 8) + 1) * 0.12;
+                      const minerals = areaVal * mineralsMultiplier;
+
+                      // Fuel, Gas & Clean Grid: Power/Energy (deterministic resource centers + gdp size)
+                      const energyMultiplier = ((codeVal % 12) + 1) * 0.15;
+                      const energy = (areaVal * 0.08) + (gdpVal * energyMultiplier);
+
+                      // Computation Grid: Silicon/Nodes (wealth-density & raw gdp scale)
+                      const compute = gdpVal * 0.75 + (gdpVal / (areaVal + 1)) * 4.5;
+
+                      // Human workforce power: Capital/Labor force scale
+                      const labor = (areaVal * 0.04) + (gdpVal * 1.35);
+
+                      return { agriculture, minerals, energy, compute, labor };
+                    };
+
+                    let secured = { agriculture:0, minerals:0, energy:0, compute:0, labor:0 };
+                    let global = { agriculture:0, minerals:0, energy:0, compute:0, labor:0 };
+
+                    allCountriesFiltered.forEach(c => {
+                      const r = getRes(c);
+                      global.agriculture += r.agriculture;
+                      global.minerals += r.minerals;
+                      global.energy += r.energy;
+                      global.compute += r.compute;
+                      global.labor += r.labor;
+                    });
+
+                    securedCountriesFiltered.forEach(c => {
+                      const r = getRes(c);
+                      secured.agriculture += r.agriculture;
+                      secured.minerals += r.minerals;
+                      secured.energy += r.energy;
+                      secured.compute += r.compute;
+                      secured.labor += r.labor;
+                    });
+
+                    // Safeguards
+                    const safePercent = (sec: number, glob: number) => glob > 0 ? (sec / glob) * 100 : 0;
+
+                    const agPerc = safePercent(secured.agriculture, global.agriculture);
+                    const minPerc = safePercent(secured.minerals, global.minerals);
+                    const nrgPerc = safePercent(secured.energy, global.energy);
+                    const cpuPerc = safePercent(secured.compute, global.compute);
+                    const labPerc = safePercent(secured.labor, global.labor);
+
+                    // Hegemony rating
+                    const totalSecuredSum = secured.agriculture + secured.minerals + secured.energy + secured.compute + secured.labor;
+                    const totalGlobalSum = global.agriculture + global.minerals + global.energy + global.compute + global.labor;
+                    const hegemonyPercent = totalGlobalSum > 0 ? (totalSecuredSum / totalGlobalSum) * 100 : 0;
+
+                    let rating = "Securing Base Outpost";
+                    let ratingColor = "text-neutral-500 border-neutral-900";
+                    if (hegemonyPercent >= 75) {
+                      rating = "Omnipresent Dominum";
+                      ratingColor = "text-purple-400 border-purple-500/20 bg-purple-500/5 shadow-[0_0_15px_rgba(168,85,247,0.1)]";
+                    } else if (hegemonyPercent >= 45) {
+                      rating = "Sovereign Superpower";
+                      ratingColor = "text-emerald-400 border-emerald-500/20 bg-emerald-500/5 shadow-[0_0_15px_rgba(16,185,129,0.1)]";
+                    } else if (hegemonyPercent >= 20) {
+                      rating = "Regional Hegemon";
+                      ratingColor = "text-amber-400 border-amber-500/20 bg-amber-500/5";
+                    } else if (hegemonyPercent > 0) {
+                      rating = "Fledgling Dominance";
+                      ratingColor = "text-sky-400 border-sky-500/20 bg-sky-500/5";
+                    }
+
+                    // Top contributing countries for the secured territories
+                    const contributors = securedCountriesFiltered
+                      .map(c => {
+                        const r = getRes(c);
+                        const scoreSum = r.agriculture + r.minerals + r.energy + r.compute + r.labor;
+                        return { name: c.name, code: c.code, score: scoreSum };
+                      })
+                      .sort((a,b) => b.score - a.score)
+                      .slice(0, 3);
+
+                    return (
+                      <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                        {/* Tab header */}
+                        <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+                          <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
+                            <Zap className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                            RESOURCES HARVESTED ({securedCountriesFiltered.length})
+                          </span>
+                        </div>
+
+                        {/* Contents */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-left font-mono">
+                          {/* Hegemony Dashboard Summary */}
+                          <div className={cn("p-4 border rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all text-center", ratingColor)}>
+                            <div className="text-[8px] uppercase tracking-widest text-neutral-500">Resource Control Rating</div>
+                            <div className="text-sm font-black uppercase tracking-tight">{rating}</div>
+                            <div className="text-[11px] font-bold text-neutral-400 mt-1">{hegemonyPercent.toFixed(1)}% of {activeContinent || 'Global'} Yield Secure</div>
+                            {/* Unified Resource Progress bar */}
+                            <div className="w-full h-1 bg-neutral-950 rounded-full overflow-hidden mt-1.5 border border-white/5">
+                              <motion.div 
+                                initial={{ width: 0 }} 
+                                animate={{ width: `${hegemonyPercent}%` }} 
+                                className="h-full bg-current" 
+                                transition={{ duration: 0.8, ease: "easeOut" }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Individual Resource Grid */}
+                          <div className="space-y-3">
+                            <div className="text-[8px] font-black text-neutral-500 uppercase tracking-widest pl-1">Geopolitical Resource Portals</div>
+                            
+                            {/* Agriculture Item */}
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1 px-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
+                                    <Sprout className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="text-left">
+                                    <h5 className="text-[9px] font-black text-neutral-300 uppercase leading-none">Arable Land Yield</h5>
+                                    <p className="text-[7px] text-neutral-500 uppercase leading-normal tracking-wide mt-0.5 font-bold">Agriculture, food production</p>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-black text-emerald-400">
+                                  {agPerc.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="h-1 bg-neutral-950 rounded-full overflow-hidden">
+                                <motion.div initial={{ width: 0 }} animate={{ width: `${agPerc}%` }} className="h-full bg-emerald-500" />
+                              </div>
+                              <div className="flex justify-between text-[7px] text-neutral-600">
+                                <span>Secured: {secured.agriculture.toFixed(0)} MT / yr</span>
+                                <span>Limit: {global.agriculture.toFixed(0)} MT / yr</span>
+                              </div>
+                            </div>
+
+                            {/* Minerals Item */}
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1 px-1.5 bg-amber-500/10 rounded-lg text-amber-500">
+                                    <Pickaxe className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="text-left">
+                                    <h5 className="text-[9px] font-black text-neutral-300 uppercase leading-none">Mineral & Metals</h5>
+                                    <p className="text-[7px] text-neutral-500 uppercase leading-normal tracking-wide mt-0.5 font-bold">Heavy ore, rare earth elements</p>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-black text-amber-500">
+                                  {minPerc.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="h-1 bg-neutral-950 rounded-full overflow-hidden">
+                                <motion.div initial={{ width: 0 }} animate={{ width: `${minPerc}%` }} className="h-full bg-amber-500" />
+                              </div>
+                              <div className="flex justify-between text-[7px] text-neutral-600">
+                                <span>Secured: {secured.minerals.toFixed(0)} KT / yr</span>
+                                <span>Limit: {global.minerals.toFixed(0)} KT / yr</span>
+                              </div>
+                            </div>
+
+                            {/* Energy Item */}
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1 px-1.5 bg-rose-500/10 rounded-lg text-rose-400">
+                                    <Zap className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="text-left">
+                                    <h5 className="text-[9px] font-black text-neutral-300 uppercase leading-none">Grid & Energy Reserves</h5>
+                                    <p className="text-[7px] text-neutral-500 uppercase leading-normal tracking-wide mt-0.5 font-bold">Crude, natural gas, power plants</p>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-black text-rose-400">
+                                  {nrgPerc.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="h-1 bg-neutral-950 rounded-full overflow-hidden">
+                                <motion.div initial={{ width: 0 }} animate={{ width: `${nrgPerc}%` }} className="h-full bg-rose-500" />
+                              </div>
+                              <div className="flex justify-between text-[7px] text-neutral-600">
+                                <span>Secured: {secured.energy.toFixed(0)} GW / hr</span>
+                                <span>Limit: {global.energy.toFixed(0)} GW / hr</span>
+                              </div>
+                            </div>
+
+                            {/* Computing Item */}
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1 px-1.5 bg-sky-500/10 rounded-lg text-sky-400">
+                                    <Cpu className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="text-left">
+                                    <h5 className="text-[9px] font-black text-neutral-300 uppercase leading-none">Silicon Grid Nodes</h5>
+                                    <p className="text-[7px] text-neutral-500 uppercase leading-normal tracking-wide mt-0.5 font-bold">High compute, AI model datacenters</p>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-black text-sky-400">
+                                  {cpuPerc.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="h-1 bg-neutral-950 rounded-full overflow-hidden">
+                                <motion.div initial={{ width: 0 }} animate={{ width: `${cpuPerc}%` }} className="h-full bg-sky-500" />
+                              </div>
+                              <div className="flex justify-between text-[7px] text-neutral-600">
+                                <span>Secured: {secured.compute.toFixed(0)} EFLOPS</span>
+                                <span>Limit: {global.compute.toFixed(0)} EFLOPS</span>
+                              </div>
+                            </div>
+
+                            {/* Human Resource Item */}
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1 px-1.5 bg-purple-500/10 rounded-lg text-purple-400">
+                                    <Users className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div className="text-left">
+                                    <h5 className="text-[9px] font-black text-neutral-300 uppercase leading-none">Labor & Workforce Force</h5>
+                                    <p className="text-[7px] text-neutral-500 uppercase leading-normal tracking-wide mt-0.5 font-bold">Engineering talent, high intellect</p>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-black text-purple-400">
+                                  {labPerc.toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="h-1 bg-neutral-950 rounded-full overflow-hidden">
+                                <motion.div initial={{ width: 0 }} animate={{ width: `${labPerc}%` }} className="h-full bg-purple-500" />
+                              </div>
+                              <div className="flex justify-between text-[7px] text-neutral-600">
+                                <span>Secured: {(secured.labor * 10).toFixed(0)}K Index</span>
+                                <span>Limit: {(global.labor * 10).toFixed(0)}K Index</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Top Contributors */}
+                          {contributors.length > 0 && (
+                            <div className="space-y-2 border-t border-neutral-800/55 pt-3">
+                              <div className="text-[8px] font-black text-neutral-500 uppercase tracking-widest pl-1">Primary Resource Hubs (Secured)</div>
+                              <div className="space-y-1">
+                                {contributors.map((co, idx) => (
+                                  <div key={idx} className="flex items-center justify-between p-2 bg-[#1c1c1e]/40 border border-neutral-800/40 rounded-xl text-[9px]">
+                                    <div className="flex items-center gap-2 truncate">
+                                      <span className="text-emerald-500 font-extrabold shrink-0">#{idx+1}</span>
+                                      {co.code && (
+                                        <img 
+                                          src={`https://flagcdn.com/w20/${co.code.toLowerCase()}.png`} 
+                                          className="w-4 h-3 rounded-sm object-cover border border-white/5 shrink-0" 
+                                          alt="" 
+                                        />
+                                      )}
+                                      <span className="text-neutral-300 font-bold truncate uppercase">{co.name}</span>
+                                    </div>
+                                    <span className="text-neutral-500 text-[8px] font-extrabold shrink-0">Yield score: {co.score.toFixed(0)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {expansionPanelTab === 'news' && (() => {
+                    const activeNews = NEWS_HOTSPOTS.find(item => item.id === activeNewsId);
+
+                    const CATEGORY_STYLES = {
+                      tech: {
+                        color: "text-sky-400 border-sky-500/20 bg-sky-500/5",
+                        badge: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+                        activeBadge: "bg-sky-500 text-neutral-950 font-bold",
+                        icon: Cpu
+                      },
+                      economic: {
+                        color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5",
+                        badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                        activeBadge: "bg-emerald-500 text-neutral-950 font-bold",
+                        icon: Sprout
+                      },
+                      political: {
+                        color: "text-rose-400 border-rose-500/20 bg-rose-500/5",
+                        badge: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+                        activeBadge: "bg-rose-500 text-neutral-950 font-bold",
+                        icon: ShieldAlert
+                      },
+                      finance: {
+                        color: "text-amber-400 border-amber-500/20 bg-amber-500/5",
+                        badge: "bg-amber-500/10 text-amber-400 border-emerald-500/20",
+                        activeBadge: "bg-amber-500 text-neutral-950 font-bold",
+                        icon: Coins
+                      }
+                    };
+
+                    const currentSelectedCountry = COUNTRIES.find(c => c.id === selectedExpandedCountryId);
+
+                    // Filters implementation
+                    const filteredNewsList = NEWS_HOTSPOTS.filter(news => {
+                      // 1. Filter by category
+                      if (newsCategoryFilter !== 'all' && news.category !== newsCategoryFilter) {
+                        return false;
+                      }
+                      // 2. Filter by Search Query
+                      if (newsSearchFilter.trim() !== '') {
+                        const q = newsSearchFilter.toLowerCase();
+                        const titleMatch = news.title.toLowerCase().includes(q);
+                        const contentMatch = news.content.toLowerCase().includes(q);
+                        if (!titleMatch && !contentMatch) return false;
+                      }
+                      // 3. Filter by Active Pin (selected geographical country)
+                      if (newsPinOnly && currentSelectedCountry) {
+                        if (news.countryCode.toLowerCase() !== currentSelectedCountry.code?.toLowerCase()) {
+                          return false;
+                        }
+                      }
+                      return true;
+                    });
+
+                    return (
+                      <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                        {/* Tab Header */}
+                        <div className="p-4 bg-emerald-500/5 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm shadow-sm shrink-0">
+                          <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest flex items-center gap-2">
+                            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
+                            INTEL & GEOPOLITICAL FEEDS
+                          </span>
+                          {(activeNews || selectedCityName || newsCategoryFilter !== 'all' || newsSearchFilter !== '' || (newsPinOnly && currentSelectedCountry)) && (
+                            <button
+                              onClick={() => {
+                                setActiveNewsId(null);
+                                setNewsCategoryFilter('all');
+                                setNewsSearchFilter('');
+                                setSelectedExpandedCountryId(null);
+                                setSelectedCityName(null);
+                                setCityNews([]);
+                              }}
+                              className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-neutral-800 hover:text-white bg-neutral-900 transition-all cursor-pointer"
+                            >
+                              Reset Filters
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Search and Filters Bar (only visible when not looking at an active report detail) */}
+                        {!activeNews && (
+                          <div className="p-3 border-b border-neutral-800 bg-[#0a0a0a]/40 space-y-2.5 shrink-0">
+                            {/* Search input */}
+                            <div className="relative group">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500 group-hover:text-emerald-500 transition-colors" />
+                              <input
+                                type="text"
+                                placeholder="SEARCH GEOPOLITICAL LOGS..."
+                                value={newsSearchFilter}
+                                onChange={(e) => setNewsSearchFilter(e.target.value)}
+                                className="w-full h-8 pl-8 pr-7 bg-neutral-950/60 border border-neutral-800 rounded-xl text-[9px] font-mono text-neutral-300 placeholder-neutral-600 focus:outline-none focus:border-emerald-500/50 uppercase transition-all"
+                              />
+                              {newsSearchFilter && (
+                                <button
+                                  onClick={() => setNewsSearchFilter('')}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-neutral-600 hover:text-neutral-400 rounded transition-colors"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Category pills */}
+                            <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none scroll-smooth">
+                              <button
+                                onClick={() => setNewsCategoryFilter('all')}
+                                className={cn(
+                                  "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border shrink-0 transition-all cursor-pointer",
+                                  newsCategoryFilter === 'all'
+                                    ? "bg-neutral-200 text-neutral-950 border-neutral-200"
+                                    : "bg-neutral-900/60 text-neutral-400 border-neutral-800/80 hover:text-neutral-200 hover:border-neutral-700"
+                                )}
+                              >
+                                ALL
+                              </button>
+                              {Object.entries(CATEGORY_STYLES).map(([cat, style]) => {
+                                const isSelected = newsCategoryFilter === cat;
+                                return (
+                                  <button
+                                    key={cat}
+                                    onClick={() => setNewsCategoryFilter(cat as any)}
+                                    className={cn(
+                                      "px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border shrink-0 transition-all flex items-center gap-1 cursor-pointer",
+                                      isSelected
+                                        ? style.activeBadge + " border-transparent"
+                                        : "bg-neutral-900/60 text-neutral-400 border-neutral-800/80 hover:text-neutral-200 hover:border-neutral-700"
+                                    )}
+                                  >
+                                    <style.icon className="w-2.5 h-2.5" />
+                                    {cat}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Active Point (Pin) Geopolitical Filter */}
+                            {currentSelectedCountry && (
+                              <div className="flex items-center justify-between p-2 bg-neutral-950/40 border border-neutral-850 rounded-xl text-[8.5px]">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                                  <img
+                                    src={`https://flagcdn.com/w20/${currentSelectedCountry.code?.toLowerCase()}.png`}
+                                    className="w-3.5 h-2.5 rounded-sm object-cover border border-white/5 shrink-0"
+                                    alt=""
+                                  />
+                                  <span className="font-extrabold text-neutral-300 truncate uppercase">
+                                    ACTIVE PIN: {currentSelectedCountry.name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                                  <button
+                                    onClick={() => setNewsPinOnly(!newsPinOnly)}
+                                    className={cn(
+                                      "px-1.5 py-0.5 rounded text-[7.5px] font-black uppercase transition-colors tracking-wide",
+                                      newsPinOnly 
+                                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                        : "bg-neutral-900 text-neutral-500 border border-neutral-800"
+                                    )}
+                                  >
+                                    {newsPinOnly ? "FILTER ON" : "SHOW ALL"}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedExpandedCountryId(null);
+                                    }}
+                                    className="p-1 text-neutral-500 hover:text-neutral-200 bg-neutral-900/50 hover:bg-neutral-800 border border-neutral-800/80 rounded"
+                                    title="Unpin location"
+                                  >
+                                    <X className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Contents List/Detail */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-left font-mono">
+                          {selectedCityName ? (
+                            /* Live Google News View */
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="space-y-4"
+                            >
+                              <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex flex-col gap-2 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-xl pointer-events-none" />
+                                <div className="flex items-center justify-between">
+                                  <span className="px-2 py-0.5 rounded-md text-[8px] font-extrabold bg-purple-500/20 text-purple-400 border border-purple-500/20 uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                                    <Globe className="w-3.5 h-3.5 text-purple-400" />
+                                    LIVE GOOGLE NEWS Wire
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedCityName(null);
+                                      setCityNews([]);
+                                    }}
+                                    className="p-1 hover:bg-neutral-800 rounded transition-colors text-neutral-500 hover:text-white cursor-pointer"
+                                    title="Close Wire"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="mt-1">
+                                  <h3 className="text-xs font-black uppercase tracking-normal text-white flex items-center gap-1.5 leading-snug">
+                                    <Radio className="w-4 h-4 text-purple-400 animate-pulse shrink-0" />
+                                    INTERCEPTED STREAM: {selectedCityName}
+                                  </h3>
+                                  <p className="text-[8px] text-neutral-400 uppercase mt-1 leading-normal tracking-wide bg-neutral-950/40 p-1.5 rounded-lg border border-neutral-900">
+                                    Scraping original article headlines and publication sources directly from Google News.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Live News Results */}
+                              {isCityNewsLoading ? (
+                                <div className="space-y-2.5">
+                                  {[1, 2, 3, 4, 5].map((i) => (
+                                    <div key={i} className="p-3 bg-[#0e0e0e]/50 border border-neutral-900 rounded-2xl animate-pulse space-y-2">
+                                      <div className="h-2 bg-neutral-800 rounded w-1/4" />
+                                      <div className="h-3 bg-neutral-800 rounded w-5/6" />
+                                      <div className="h-2 bg-neutral-800 rounded w-1/3" />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : cityNewsError ? (
+                                <div className="p-5 border border-red-500/20 bg-red-500/5 rounded-2xl text-center space-y-2.5">
+                                  <div className="text-[9px] font-black text-red-500 uppercase tracking-widest">FEED ERROR CONNECTING WIRE</div>
+                                  <p className="text-[8px] text-neutral-400 uppercase leading-relaxed font-semibold">{cityNewsError}</p>
+                                  <button
+                                    onClick={() => fetchLiveCityNews(selectedCityName)}
+                                    className="px-3 py-1.5 text-[8px] border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg uppercase font-black tracking-wider transition-all cursor-pointer bg-neutral-950 hover:scale-[1.02] active:scale-[0.98]"
+                                  >
+                                    RETRY CONNECTION
+                                  </button>
+                                </div>
+                              ) : cityNews.length === 0 ? (
+                                <div className="p-6 border border-dashed border-neutral-800 rounded-2xl text-center space-y-2">
+                                  <div className="text-[9px] font-black text-neutral-550 uppercase tracking-widest">No Bulletins Resolved</div>
+                                  <p className="text-[8px] text-neutral-600 uppercase leading-relaxed">No live reports found for "{selectedCityName}" right now.</p>
+                                </div>
+                              ) : (
+                                <div className="space-y-2.5">
+                                  {cityNews.map((news, idx) => (
+                                    <a
+                                      key={idx}
+                                      href={news.link}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="block p-3.5 bg-neutral-900/60 border border-neutral-850 rounded-2xl hover:border-purple-500/40 hover:bg-[#16121e]/50 shadow-sm hover:shadow-purple-500/5 transition-all group text-left"
+                                    >
+                                      <div className="flex items-center justify-between w-full mb-1">
+                                        <span className="text-[7.5px] font-extrabold text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping shrink-0" />
+                                          {news.source}
+                                        </span>
+                                        <span className="text-[7px] text-neutral-500 font-bold uppercase">{news.date}</span>
+                                      </div>
+                                      <h4 className="text-[10px] font-bold uppercase tracking-wide text-neutral-205 leading-snug group-hover:text-white transition-colors">
+                                        {news.title}
+                                      </h4>
+                                      <div className="mt-1.5 flex items-center gap-1 text-[7px] text-neutral-550 font-extrabold uppercase group-hover:text-purple-405 transition-colors">
+                                        <span>LAUNCH ORIGINAL TELEMETRY</span>
+                                        <ExternalLink className="w-2.5 h-2.5" />
+                                      </div>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Back Button */}
+                              <button
+                                onClick={() => {
+                                  setSelectedCityName(null);
+                                  setCityNews([]);
+                                }}
+                                className="h-9 w-full flex items-center justify-center gap-1.5 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-450 text-[9px] font-black uppercase tracking-wider hover:bg-neutral-900 hover:text-white transition-all cursor-pointer border-dashed"
+                              >
+                                <ArrowLeft className="w-3.5 h-3.5" />
+                                Back to Geopolitical Streams
+                              </button>
+                            </motion.div>
+                          ) : activeNews ? (
+                            // Report detail view
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="space-y-4"
+                            >
+                              {(() => {
+                                const styles = CATEGORY_STYLES[activeNews.category];
+                                const CatIcon = styles.icon;
+                                const country = COUNTRIES.find(c => c.code?.toLowerCase() === activeNews.countryCode.toLowerCase());
+                                return (
+                                  <>
+                                    <div className={cn("p-4 border rounded-2xl flex flex-col gap-2 transition-all", styles.color)}>
+                                      <div className="flex items-center justify-between">
+                                        <span className={cn("px-2 py-0.5 rounded-md text-[8.5px] font-black border uppercase tracking-wider", styles.badge)}>
+                                          {activeNews.category}
+                                        </span>
+                                        <span className="text-[8.5px] text-neutral-500 font-bold uppercase">{activeNews.date}</span>
+                                      </div>
+                                      <div className="flex items-start gap-2 mt-1">
+                                        <CatIcon className="w-5 h-5 shrink-0 mt-0.5 text-current" />
+                                        <h3 className="text-xs font-black uppercase tracking-tight leading-snug">{activeNews.title}</h3>
+                                      </div>
+                                      {country && (
+                                        <div className="flex items-center gap-2 mt-1.5 border-t border-neutral-800/40 pt-2 text-[9.5px]">
+                                          <img
+                                            src={`https://flagcdn.com/w20/${country.code?.toLowerCase()}.png`}
+                                            className="w-4 h-3 rounded-sm object-cover border border-white/10 shrink-0"
+                                            alt=""
+                                          />
+                                          <span className="text-neutral-300 font-bold uppercase">{country.name}</span>
+                                          <span className="text-neutral-500 font-semibold">• Capital: {country.capital}</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="p-4 bg-neutral-900/40 border border-neutral-800/80 rounded-2xl space-y-3">
+                                      <div className="text-[8.5px] font-black text-neutral-500 uppercase tracking-widest leading-none">ANALYSIS BRIEFING</div>
+                                      <p className="text-[10px] text-neutral-400 uppercase leading-relaxed tracking-wide font-medium">
+                                        {activeNews.content}
+                                      </p>
+                                      <div className="text-[8px] text-neutral-500 font-bold uppercase pt-1 border-t border-neutral-800/20">
+                                        TELEMETRY CLASSIFIED SOURCE: {activeNews.source}
+                                      </div>
+                                    </div>
+
+                                    <div className="pt-2 flex flex-col gap-2">
+                                      <a
+                                        href={activeNews.link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="h-10 w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 text-neutral-950 text-[10px] font-black uppercase tracking-widest font-mono hover:scale-[1.02] active:scale-[0.98] transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] cursor-pointer"
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                        GOOGLE NEWS LIVE FEED
+                                      </a>
+                                      
+                                      <button
+                                        onClick={() => {
+                                          setActiveNewsId(null);
+                                        }}
+                                        className="h-9 w-full flex items-center justify-center rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 text-[10px] font-bold uppercase hover:bg-neutral-800/60 transition-all cursor-pointer"
+                                      >
+                                        Back to Streams overview
+                                      </button>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </motion.div>
+                          ) : (
+                            // Stream overview list
+                            <div className="space-y-3">
+                              {filteredNewsList.length === 0 ? (
+                                <div className="p-6 border border-dashed border-neutral-800 rounded-3xl text-center space-y-3">
+                                  <div className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">
+                                    No Streams Intercepted
+                                  </div>
+                                  <p className="text-[8.5px] text-neutral-600 uppercase tracking-wider leading-relaxed">
+                                    No intelligence logs match the current pin or search active filters.
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      setNewsCategoryFilter('all');
+                                      setNewsSearchFilter('');
+                                      if (newsPinOnly) setNewsPinOnly(false);
+                                      setSelectedExpandedCountryId(null);
+                                    }}
+                                    className="px-2.5 py-1 text-[8px] hover:text-white border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 rounded-md uppercase font-black tracking-wider transition-colors"
+                                  >
+                                    Reset Filters
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="rounded-2xl p-3 bg-neutral-900/30 border border-neutral-800/40 flex flex-col gap-1">
+                                    <span className="text-[8.5px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 leading-none">
+                                      <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                      INTEL BEACONS ACTIVE ({filteredNewsList.length})
+                                    </span>
+                                    <p className="text-[8px] text-neutral-500 uppercase tracking-wide leading-normal">
+                                      {currentSelectedCountry 
+                                        ? `Showing intelligence streams filtered by active pin on map (${currentSelectedCountry.name}).`
+                                        : "Click glowing hotspot beacons directly on the world map OR tap the global geopolitical streams below to isolate coordinates."}
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    {filteredNewsList.map((news) => {
+                                      const styles = CATEGORY_STYLES[news.category];
+                                      const CatIcon = styles.icon;
+                                      const country = COUNTRIES.find(c => c.code?.toLowerCase() === news.countryCode.toLowerCase());
+
+                                      return (
+                                        <button
+                                          key={news.id}
+                                          onClick={() => {
+                                            setActiveNewsId(news.id);
+                                            if (country) {
+                                              setSelectedExpandedCountryId(country.id);
+                                            }
+                                          }}
+                                          className="w-full p-3 bg-neutral-900/45 border border-neutral-800/60 rounded-2xl hover:border-neutral-700 hover:bg-neutral-900/80 transition-all flex flex-col gap-1.5 text-left group"
+                                        >
+                                          <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-1.5">
+                                              <CatIcon className={cn("w-3.5 h-3.5", styles.color.split(" ")[0])} />
+                                              <span className={cn("text-[7.5px] font-extrabold uppercase tracking-widest", styles.color.split(" ")[0])}>
+                                                {news.category}
+                                              </span>
+                                            </div>
+                                            <span className="text-[7.5px] text-neutral-600 font-bold uppercase">{news.date}</span>
+                                          </div>
+
+                                          <h4 className="text-[9.5px] font-bold uppercase tracking-wide text-neutral-300 leading-tight group-hover:text-white transition-colors">
+                                            {news.title}
+                                          </h4>
+
+                                          {country && (
+                                            <div className="flex items-center justify-between text-[7.5px] pt-1 border-t border-neutral-900/50 mt-0.5">
+                                              <div className="flex items-center gap-1.5 text-neutral-500">
+                                                <img
+                                                  src={`https://flagcdn.com/w20/${country.code?.toLowerCase()}.png`}
+                                                  className="w-3.5 h-2.5 rounded-sm object-cover border border-white/5 opacity-80"
+                                                  alt=""
+                                                />
+                                                <span className="font-extrabold uppercase text-neutral-400 group-hover:text-neutral-300 transition-colors">
+                                                  {country.name}
+                                                </span>
+                                              </div>
+                                              <span className="text-[7px] text-neutral-600 font-black tracking-wider uppercase group-hover:text-neutral-500 transition-colors">
+                                                COORDINATES MATCHED
+                                              </span>
+                                            </div>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </motion.div>
 
 

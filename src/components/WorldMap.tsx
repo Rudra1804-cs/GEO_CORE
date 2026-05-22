@@ -6,6 +6,8 @@ import { CountryData } from '../types';
 import { COUNTRIES } from '../data/countries';
 import { cn } from '../lib/utils';
 import { Gauge, Play, Pause, X, Sliders } from 'lucide-react';
+import { NEWS_HOTSPOTS } from '../data/news';
+import { ADDITIONAL_CITIES } from '../data/cities';
 
 interface WorldMapProps {
   guessedIds: Set<string>;
@@ -18,6 +20,10 @@ interface WorldMapProps {
   isPaused?: boolean;
   highlightedAllianceMemberIds?: Set<string> | null;
   plotContinentsColorMode?: boolean;
+  newsMode?: boolean;
+  activeNewsId?: string | null;
+  onNewsPointClick?: (newsId: string) => void;
+  onCityClick?: (cityName: string, countryCode: string, countryId?: string) => void;
 }
 
 const CONTINENT_FILL_COLORS: Record<string, string> = {
@@ -50,7 +56,11 @@ export function WorldMap({
   isMemoryMode = false,
   isPaused = false,
   highlightedAllianceMemberIds = null,
-  plotContinentsColorMode = false
+  plotContinentsColorMode = false,
+  newsMode = false,
+  activeNewsId = null,
+  onNewsPointClick,
+  onCityClick
 }: WorldMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -63,6 +73,19 @@ export function WorldMap({
   const isPausedRef = useRef(isPaused);
   const highlightedAllianceMemberIdsRef = useRef(highlightedAllianceMemberIds);
   const plotContinentsColorModeRef = useRef(plotContinentsColorMode);
+  const newsModeRef = useRef(newsMode);
+  const activeNewsIdRef = useRef(activeNewsId);
+  const onNewsPointClickRef = useRef(onNewsPointClick);
+  const onCountryClickRef = useRef(onCountryClick);
+  const onCityClickRef = useRef(onCityClick);
+
+  useEffect(() => {
+    onCountryClickRef.current = onCountryClick;
+  }, [onCountryClick]);
+
+  useEffect(() => {
+    onCityClickRef.current = onCityClick;
+  }, [onCityClick]);
 
   const countryContinentMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -119,6 +142,20 @@ export function WorldMap({
     plotContinentsColorModeRef.current = plotContinentsColorMode;
     if (mapLoaded) updateMapColors(true);
   }, [plotContinentsColorMode, mapLoaded]);
+
+  useEffect(() => {
+    newsModeRef.current = newsMode;
+    if (mapLoaded) updateMapColors(true);
+  }, [newsMode, mapLoaded]);
+
+  useEffect(() => {
+    activeNewsIdRef.current = activeNewsId;
+    if (mapLoaded) updateMapColors(true);
+  }, [activeNewsId, mapLoaded]);
+
+  useEffect(() => {
+    onNewsPointClickRef.current = onNewsPointClick;
+  }, [onNewsPointClick]);
 
   const updateMapColors = (immediate = false) => {
     if (!gRef.current) return;
@@ -188,7 +225,7 @@ export function WorldMap({
       });
 
     // Optimized Pin Handling
-    const pinData = (highlightedIdRef.current && containerRef.current && projectionRef.current) 
+    const pinData = (highlightedIdRef.current && containerRef.current && projectionRef.current && !newsModeRef.current) 
       ? (() => {
           const country = COUNTRIES.find(c => c.id === highlightedIdRef.current);
           if (!country || !country.capitalCoords) return [];
@@ -263,6 +300,262 @@ export function WorldMap({
       .text(d => d.capital || '')
       .attr('font-size', projectionType === 'orthographic' ? '9px' : '6px')
       .attr('y', projectionType === 'orthographic' ? -9 : -6);
+
+    // News Mode Hotspot Pins Handler
+    const CATEGORY_COLORS: Record<string, string> = {
+      tech: '#38bdf8',
+      economic: '#10b981',
+      political: '#f43f5e',
+      finance: '#f59e0b'
+    };
+
+    const newsPinData = (newsModeRef.current && containerRef.current && projectionRef.current)
+      ? NEWS_HOTSPOTS.map(news => {
+          const country = COUNTRIES.find(c => c.code?.toLowerCase() === news.countryCode.toLowerCase());
+          if (!country || !country.capitalCoords) return null;
+          
+          const proj = projectionRef.current;
+          if (!proj) return null;
+          const coords = proj([country.capitalCoords.lng, country.capitalCoords.lat]);
+          if (!coords || isNaN(coords[0])) return null;
+
+          let isVisible = true;
+          if (projectionType === 'orthographic') {
+            const width = dimensionsRef.current.width;
+            const height = dimensionsRef.current.height;
+            const center = proj.invert ? proj.invert([width / 2, height / 2]) : null;
+            if (center) {
+              isVisible = d3.geoDistance(center, [country.capitalCoords.lng, country.capitalCoords.lat]) < Math.PI / 2;
+            }
+          }
+          if (!isVisible) return null;
+
+          const worldScale = proj.scale();
+          const worldWidth = projectionType === 'mercator' ? 2 * Math.PI * worldScale : 0;
+          const instances = projectionType === 'mercator' ? [-1, 0, 1] : [0];
+
+          return instances.map(offset => ({
+            id: `news-pin-${news.id}-${offset}`,
+            newsId: news.id,
+            countryId: country.id,
+            x: coords[0] + offset * worldWidth,
+            y: coords[1],
+            category: news.category,
+            title: news.title
+          }));
+        }).filter(Boolean).flat() as any[]
+      : [];
+
+    const newsPins = gRef.current.selectAll<SVGGElement, any>('.news-hotspot-pin')
+      .data(newsPinData, d => d.id);
+
+    newsPins.exit().remove();
+
+    if (newsModeRef.current) {
+      const newsPinsEnter = newsPins.enter()
+        .append('g')
+        .attr('class', 'news-hotspot-pin')
+        .style('cursor', 'pointer');
+
+      // Outer animated pulse ring
+      newsPinsEnter.append('circle')
+        .attr('class', 'pulse-ring')
+        .attr('r', 8)
+        .attr('fill', d => CATEGORY_COLORS[d.category] || '#3b82f6')
+        .attr('opacity', 0.4)
+        .append('animate')
+        .attr('attributeName', 'r')
+        .attr('values', '4;16;4')
+        .attr('dur', '2s')
+        .attr('repeatCount', 'indefinite');
+
+      // Inner solid core
+      newsPinsEnter.append('circle')
+        .attr('class', 'solid-core')
+        .attr('r', 5)
+        .attr('fill', d => CATEGORY_COLORS[d.category] || '#3b82f6')
+        .attr('stroke', '#ffffff')
+        .attr('stroke-width', 1.5);
+
+      // Selected active news ring
+      newsPinsEnter.append('circle')
+        .attr('class', 'active-ring')
+        .attr('r', 11)
+        .attr('fill', 'none')
+        .attr('stroke', d => CATEGORY_COLORS[d.category] || '#3b82f6')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '3 2')
+        .attr('opacity', 0);
+
+      // Large invisible click target
+      newsPinsEnter.append('circle')
+        .attr('r', 18)
+        .attr('fill', 'transparent')
+        .on('click', (event, d) => {
+          event.stopPropagation();
+          if (onNewsPointClickRef.current) {
+            onNewsPointClickRef.current(d.newsId);
+          }
+        });
+
+      const newsPinsAll = newsPinsEnter.merge(newsPins);
+      newsPinsAll.attr('transform', d => `translate(${d.x}, ${d.y})`);
+
+      newsPinsAll.select('.active-ring')
+        .attr('opacity', d => d.newsId === activeNewsIdRef.current ? 1 : 0);
+    }
+
+    // Global cities layer (adds more cities as we zoom)
+    let kValue = 1;
+    if (svgRef.current) {
+      const transform = d3.zoomTransform(svgRef.current);
+      if (transform) kValue = transform.k;
+    }
+
+    const isMercator = projectionType === 'mercator';
+    const radiusMultiplier = isMercator ? (1 / kValue) : 1;
+
+    const citiesData: any[] = [];
+    if (newsModeRef.current && containerRef.current && projectionRef.current) {
+      const proj = projectionRef.current;
+      const worldScale = proj.scale();
+      const worldWidth = isMercator ? 2 * Math.PI * worldScale : 0;
+      const instances = isMercator ? [-1, 0, 1] : [0];
+
+      // 1. All Capitals (visible when zoom level >= 1.6)
+      if (kValue >= 1.6) {
+        COUNTRIES.forEach(c => {
+          if (c.capital && c.capitalCoords) {
+            const coords = proj([c.capitalCoords.lng, c.capitalCoords.lat]);
+            if (coords && !isNaN(coords[0])) {
+              // Ensure we check orthographic visibility
+              let isVisible = true;
+              if (projectionType === 'orthographic') {
+                const width = dimensionsRef.current.width;
+                const height = dimensionsRef.current.height;
+                const center = proj.invert ? proj.invert([width / 2, height / 2]) : null;
+                if (center) {
+                  isVisible = d3.geoDistance(center, [c.capitalCoords.lng, c.capitalCoords.lat]) < Math.PI / 2;
+                }
+              }
+              if (isVisible) {
+                instances.forEach(offset => {
+                  citiesData.push({
+                    id: `city-cap-${c.id}-${offset}`,
+                    name: c.capital,
+                    x: coords[0] + offset * worldWidth,
+                    y: coords[1],
+                    isCapital: true,
+                    countryCode: c.code?.toLowerCase() || '',
+                    countryId: c.id,
+                    description: `Capital city of ${c.name}`
+                  });
+                });
+              }
+            }
+          }
+        });
+      }
+
+      // 2. Additional secondary cities (visible when zoom level >= city.minZoom)
+      ADDITIONAL_CITIES.forEach((city, idx) => {
+        if (kValue >= city.minZoom) {
+          const coords = proj([city.lng, city.lat]);
+          if (coords && !isNaN(coords[0])) {
+            let isVisible = true;
+            if (projectionType === 'orthographic') {
+              const width = dimensionsRef.current.width;
+              const height = dimensionsRef.current.height;
+              const center = proj.invert ? proj.invert([width / 2, height / 2]) : null;
+              if (center) {
+                isVisible = d3.geoDistance(center, [city.lng, city.lat]) < Math.PI / 2;
+              }
+            }
+            if (isVisible) {
+              instances.forEach(offset => {
+                citiesData.push({
+                  id: `city-sec-${idx}-${offset}`,
+                  name: city.name,
+                  x: coords[0] + offset * worldWidth,
+                  y: coords[1],
+                  isCapital: false,
+                  countryCode: city.countryCode,
+                  description: city.description
+                });
+              });
+            }
+          }
+        }
+      });
+    }
+
+    const cityPins = gRef.current.selectAll<SVGGElement, any>('.city-pin')
+      .data(citiesData, d => d.id);
+
+    cityPins.exit().remove();
+
+    if (newsModeRef.current) {
+      const cityPinsEnter = cityPins.enter()
+        .append('g')
+        .attr('class', 'city-pin')
+        .style('cursor', 'pointer')
+        .on('click', (event, d) => {
+          event.stopPropagation();
+          
+          // Trigger the onCityClick callback with city details
+          if (onCityClickRef.current) {
+            onCityClickRef.current(d.name, d.countryCode, d.countryId);
+          } else {
+            // Fallback to legacy country-clicking behaviour if no custom handler
+            const targetCountry = COUNTRIES.find(c => c.code?.toLowerCase() === d.countryCode.toLowerCase());
+            if (targetCountry && onCountryClickRef.current) {
+              onCountryClickRef.current(targetCountry.id);
+            }
+          }
+        });
+
+      // Outer circle
+      cityPinsEnter.append('circle')
+        .attr('class', 'city-pulse')
+        .attr('fill', d => d.isCapital ? '#10b981' : '#a855f7')
+        .attr('opacity', 0.15)
+        .attr('r', d => (d.isCapital ? 4.5 : 3.5) * radiusMultiplier);
+
+      // Inner core
+      cityPinsEnter.append('circle')
+        .attr('class', 'city-core')
+        .attr('fill', '#ffffff')
+        .attr('stroke', d => d.isCapital ? '#10b981' : '#a855f7')
+        .attr('stroke-width', 1 * radiusMultiplier)
+        .attr('r', d => (d.isCapital ? 2.2 : 1.8) * radiusMultiplier);
+
+      // Label
+      cityPinsEnter.append('text')
+        .attr('class', 'city-label')
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#e2e8f0')
+        .attr('font-family', 'monospace')
+        .attr('font-weight', d => d.isCapital ? '800' : '500')
+        .style('text-shadow', '0px 1px 3px rgba(0,0,0,0.95)');
+
+      const cityPinsAll = cityPinsEnter.merge(cityPins);
+      cityPinsAll.attr('transform', d => `translate(${d.x}, ${d.y})`);
+
+      cityPinsAll.style('opacity', 0.85);
+
+      cityPinsAll.select('.city-pulse')
+        .attr('r', d => (d.isCapital ? 4.5 : 3.5) * radiusMultiplier)
+        .attr('opacity', 0.15);
+
+      cityPinsAll.select('.city-core')
+        .attr('stroke-width', 1 * radiusMultiplier)
+        .attr('r', d => (d.isCapital ? 2.2 : 1.8) * radiusMultiplier);
+
+      cityPinsAll.select('.city-label')
+        .text(d => d.name)
+        .attr('font-size', d => `${(d.isCapital ? 5.5 : 4.5) * radiusMultiplier}px`)
+        .attr('y', d => `${(d.isCapital ? -6 : -5) * radiusMultiplier}px`);
+    }
   };
 
   useEffect(() => {
@@ -611,6 +904,82 @@ export function WorldMap({
     }, 2000);
     return () => clearTimeout(timer);
   }, [highlightedId, isFinished]);
+
+  // Handle auto-focus / centering of the globe onto the highlighted nation
+  useEffect(() => {
+    if (!mapLoaded || projectionType !== 'orthographic' || !highlightedId || isFinished || !gRef.current || !projectionRef.current || !containerRef.current) return;
+    
+    // Find target coordinates (prioritize capital city coords, fallback to geoCentroid)
+    let targetCoords: [number, number] | null = null;
+    const country = COUNTRIES.find(c => c.id === highlightedId);
+    if (country && country.capitalCoords) {
+      targetCoords = [country.capitalCoords.lng, country.capitalCoords.lat];
+    } else if (countriesDataRef.current) {
+      const feature = countriesDataRef.current.features.find(
+        (f: any) => String(f.id).padStart(3, '0') === highlightedId
+      );
+      if (feature) {
+        try {
+          const centroid = d3.geoCentroid(feature);
+          if (centroid && !isNaN(centroid[0]) && !isNaN(centroid[1])) {
+            targetCoords = centroid as [number, number];
+          }
+        } catch (e) {
+          // ignore centroid error
+        }
+      }
+    }
+
+    if (targetCoords) {
+      const g = gRef.current;
+      const proj = projectionRef.current;
+      const path = d3.geoPath().projection(proj);
+
+      // Disable auto-rotate and record last interaction time to avoid immediate spin action
+      lastInteractionTimeRef.current = Date.now();
+
+      // Use d3 transition to smoothly rotate to [-lng, -lat]
+      const startRotation = proj.rotate();
+      const endRotation: [number, number, number] = [-targetCoords[0], -targetCoords[1], 0];
+
+      // Standardize the shortest rotation path
+      let diffLng = endRotation[0] - startRotation[0];
+      while (diffLng < -180) diffLng += 360;
+      while (diffLng > 180) diffLng -= 360;
+      
+      const shortPathEndRotation: [number, number, number] = [
+        startRotation[0] + diffLng,
+        endRotation[1],
+        0
+      ];
+
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+      const baseScale = Math.min(width, height) / 2.5;
+      const startScale = proj.scale();
+
+      d3.transition()
+        .duration(1500)
+        .ease(d3.easeCubicInOut)
+        .tween("globe-rotate", () => {
+          const r = d3.interpolate(startRotation, shortPathEndRotation);
+          const s = d3.interpolate(startScale, baseScale);
+          return (t) => {
+            lastInteractionTimeRef.current = Date.now();
+            const currentRotation = r(t) as [number, number, number];
+            const currentScale = s(t);
+            proj.rotate(currentRotation);
+            proj.scale(currentScale);
+            rotationRef.current = currentRotation;
+            g.selectAll('path').attr('d', path as any);
+            updateMapColors(true); // Redraw pin positions and map paths in lockstep to avoid any displacement/lag
+          };
+        })
+        .on("end", () => {
+          updateMapColors(true);
+        });
+    }
+  }, [highlightedId, projectionType, mapLoaded, isFinished]);
 
   useEffect(() => {
     if (!mapLoaded || !gRef.current || !countriesDataRef.current || !containerRef.current || !svgRef.current) return;
