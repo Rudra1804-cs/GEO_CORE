@@ -327,6 +327,36 @@ export default function App() {
   const [originalFlagQueue, setOriginalFlagQueue] = useState<string[]>([]);
   const [skippedFlagsCount, setSkippedFlagsCount] = useState<Record<string, number>>({});
   const [deferredFlags, setDeferredFlags] = useState<string[]>([]);
+  const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const currentTargetId = gameType === 'flag' ? currentTargetFlagId : currentTargetHighlightId;
+    if (!currentTargetId) {
+      setMultipleChoiceOptions([]);
+      return;
+    }
+    const correctCountry = COUNTRIES.find(c => c.id === currentTargetId);
+    if (!correctCountry) {
+      setMultipleChoiceOptions([]);
+      return;
+    }
+    
+    // Select 3 random distractors from different countries
+    const distractors: string[] = [];
+    const pool = COUNTRIES.filter(c => c.id !== currentTargetId);
+    while (distractors.length < 3 && pool.length > 0) {
+      const randIdx = Math.floor(Math.random() * pool.length);
+      const chosen = pool.splice(randIdx, 1)[0];
+      if (!distractors.includes(chosen.name)) {
+        distractors.push(chosen.name);
+      }
+    }
+    
+    const options = [correctCountry.name, ...distractors];
+    // Shuffle the options
+    const shuffled = options.sort(() => Math.random() - 0.5);
+    setMultipleChoiceOptions(shuffled);
+  }, [currentTargetFlagId, currentTargetHighlightId, gameType]);
 
   const sanitizeHintText = (text: string, country: any): string => {
     if (!text || !country) return "";
@@ -1075,8 +1105,8 @@ export default function App() {
     const targetCountry = COUNTRIES.find(c => c.id === currentTargetFlagId);
     const prevSkipCount = skippedFlagsCount[currentTargetFlagId] || 0;
     
-    // Guardian check: only 1 skip allowed
-    if (prevSkipCount >= 1) {
+    // Guardian check: only 2 skips allowed
+    if (prevSkipCount >= 2) {
       setFeedback({ text: "NO MORE SKIPS REMAINING FOR THIS FLAG", type: 'error' });
       setTimeout(() => setFeedback(null), 2000);
       return;
@@ -1084,27 +1114,34 @@ export default function App() {
 
     const newSkipCount = prevSkipCount + 1;
     setSkippedFlagsCount(prev => ({ ...prev, [currentTargetFlagId!]: newSkipCount }));
-    setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''}`, type: 'error' });
-    setTimeout(() => setFeedback(null), 1500);
 
-    // Save current highlighted country to deferred to be presented later in the 2nd stage
-    const nextDeferred = [...deferredFlags, currentTargetFlagId];
-    setDeferredFlags(nextDeferred);
+    if (newSkipCount === 1) {
+      setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''} (DEFERRED)`, type: 'error' });
+      setTimeout(() => setFeedback(null), 1500);
 
-    const nextQueue = flagQueue.slice(1);
-    if (nextQueue.length > 0) {
-      setFlagQueue(nextQueue);
-      setCurrentTargetFlagId(nextQueue[0]);
-    } else if (nextDeferred.length > 0) {
-      // Reached the end of the immediate list, shuffle and show deferred
-      const shuffledDeferred = [...nextDeferred].sort(() => Math.random() - 0.5);
-      setFlagQueue(shuffledDeferred);
-      setCurrentTargetFlagId(shuffledDeferred[0]);
-      setDeferredFlags([]);
-      setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
-      setTimeout(() => setFeedback(null), 3000);
+      // Save current flag country to deferred to be presented later in the 2nd stage
+      const nextDeferred = [...deferredFlags, currentTargetFlagId];
+      setDeferredFlags(nextDeferred);
+
+      const nextQueue = flagQueue.slice(1);
+      if (nextQueue.length > 0) {
+        setFlagQueue(nextQueue);
+        setCurrentTargetFlagId(nextQueue[0]);
+      } else if (nextDeferred.length > 0) {
+        // Reached the end of the immediate list, shuffle and show deferred
+        const shuffledDeferred = [...nextDeferred].sort(() => Math.random() - 0.5);
+        setFlagQueue(shuffledDeferred);
+        setCurrentTargetFlagId(shuffledDeferred[0]);
+        setDeferredFlags([]);
+        setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
+        setTimeout(() => setFeedback(null), 3000);
+      } else {
+        finishGame();
+      }
     } else {
-      finishGame();
+      // newSkipCount === 2: We don't defer it. We stay on the current target but show the 4 options
+      setFeedback({ text: `DECRYPTION CODES ONLINE: SELECT DECRYPTION PATHWAY`, type: 'info' });
+      setTimeout(() => setFeedback(null), 2000);
     }
   };
 
@@ -1114,8 +1151,8 @@ export default function App() {
     const targetCountry = COUNTRIES.find(c => c.id === currentTargetHighlightId);
     const prevSkipCount = skippedHighlightsCount[currentTargetHighlightId] || 0;
     
-    // Guardian check: only 1 skip allowed
-    if (prevSkipCount >= 1) {
+    // Guardian check: only 2 skips allowed
+    if (prevSkipCount >= 2) {
       setFeedback({ text: "NO MORE SKIPS REMAINING FOR THIS TARGET", type: 'error' });
       setTimeout(() => setFeedback(null), 2000);
       return;
@@ -1123,27 +1160,139 @@ export default function App() {
 
     const newSkipCount = prevSkipCount + 1;
     setSkippedHighlightsCount(prev => ({ ...prev, [currentTargetHighlightId!]: newSkipCount }));
-    setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''}`, type: 'error' });
-    setTimeout(() => setFeedback(null), 1500);
 
-    // Save current highlighted country to deferred to be presented later in the 2nd stage
-    const nextDeferred = [...deferredHighlights, currentTargetHighlightId];
-    setDeferredHighlights(nextDeferred);
+    if (newSkipCount === 1) {
+      setFeedback({ text: `SKIPPED: ${targetCountry?.name.toUpperCase() || ''} (DEFERRED)`, type: 'error' });
+      setTimeout(() => setFeedback(null), 1500);
 
-    const nextQueue = highlightQueue.slice(1);
-    if (nextQueue.length > 0) {
-      setHighlightQueue(nextQueue);
-      setCurrentTargetHighlightId(nextQueue[0]);
-    } else if (nextDeferred.length > 0) {
-      // Reached the end of the immediate list, shuffle and show deferred
-      const shuffledDeferred = [...nextDeferred].sort(() => Math.random() - 0.5);
-      setHighlightQueue(shuffledDeferred);
-      setCurrentTargetHighlightId(shuffledDeferred[0]);
-      setDeferredHighlights([]);
-      setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
-      setTimeout(() => setFeedback(null), 3000);
+      // Save current highlighted country to deferred to be presented later in the 2nd stage
+      const nextDeferred = [...deferredHighlights, currentTargetHighlightId];
+      setDeferredHighlights(nextDeferred);
+
+      const nextQueue = highlightQueue.slice(1);
+      if (nextQueue.length > 0) {
+        setHighlightQueue(nextQueue);
+        setCurrentTargetHighlightId(nextQueue[0]);
+      } else if (nextDeferred.length > 0) {
+        // Reached the end of the immediate list, shuffle and show deferred
+        const shuffledDeferred = [...nextDeferred].sort(() => Math.random() - 0.5);
+        setHighlightQueue(shuffledDeferred);
+        setCurrentTargetHighlightId(shuffledDeferred[0]);
+        setDeferredHighlights([]);
+        setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
+        setTimeout(() => setFeedback(null), 3000);
+      } else {
+        finishGame();
+      }
     } else {
-      finishGame();
+      // newSkipCount === 2: We don't defer it. We stay on the current target but show the 4 options
+      setFeedback({ text: `DECRYPTION CODES ONLINE: SELECT DECRYPTION PATHWAY`, type: 'info' });
+      setTimeout(() => setFeedback(null), 2000);
+    }
+  };
+
+  const handleOptionSelect = (optionName: string) => {
+    playTypeSound();
+    playReturnSound();
+    
+    const normalized = optionName.trim().toLowerCase();
+    
+    if (gameType === 'flag' && currentTargetFlagId) {
+      const target = COUNTRIES.find(c => c.id === currentTargetFlagId);
+      if (!target) return;
+      const names = [target.name.toLowerCase(), ...target.aliases.map(a => a.toLowerCase())];
+      
+      if (names.includes(normalized)) {
+        const newGuessed = new Set(guessedIds);
+        if (!newGuessed.has(target.id)) {
+          newGuessed.add(target.id);
+          setGuessedIds(newGuessed);
+          setLastGuessedId(target.id);
+          setMostRecentGuessedId(target.id);
+          
+          const basePoints = getCountryPoints(target);
+          const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+          setScore(prev => prev + points);
+          
+          setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
+          setTimeout(() => setFeedback(null), 1500);
+
+          if (target.code) {
+            setActiveFlag(target.code);
+            setTimeout(() => setActiveFlag(null), 1500);
+          }
+        }
+
+        setInputValue('');
+
+        const nextQueue = flagQueue.slice(1);
+        if (nextQueue.length > 0) {
+          setFlagQueue(nextQueue);
+          setCurrentTargetFlagId(nextQueue[0]);
+        } else if (deferredFlags.length > 0) {
+          const shuffledDeferred = [...deferredFlags].sort(() => Math.random() - 0.5);
+          setFlagQueue(shuffledDeferred);
+          setCurrentTargetFlagId(shuffledDeferred[0]);
+          setDeferredFlags([]);
+          setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
+          setTimeout(() => setFeedback(null), 3000);
+        } else {
+          finishGame();
+        }
+      } else {
+         setFeedback({ text: `INCORRECT GUESS`, type: 'error' });
+         setTimeout(() => setFeedback(null), 1000);
+      }
+      return;
+    }
+
+    if (gameType === 'highlight' && currentTargetHighlightId) {
+      const target = COUNTRIES.find(c => c.id === currentTargetHighlightId);
+      if (!target) return;
+      const names = [target.name.toLowerCase(), ...target.aliases.map(a => a.toLowerCase())];
+      
+      if (names.includes(normalized)) {
+        const newGuessed = new Set(guessedIds);
+        if (!newGuessed.has(target.id)) {
+          newGuessed.add(target.id);
+          setGuessedIds(newGuessed);
+          setLastGuessedId(target.id);
+          setMostRecentGuessedId(target.id);
+          
+          const basePoints = getCountryPoints(target);
+          const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+          setScore(prev => prev + points);
+          
+          setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
+          setTimeout(() => setFeedback(null), 1500);
+
+          if (target.code) {
+            setActiveFlag(target.code);
+            setTimeout(() => setActiveFlag(null), 1500);
+          }
+        }
+
+        setInputValue('');
+
+        const nextQueue = highlightQueue.slice(1);
+        if (nextQueue.length > 0) {
+          setHighlightQueue(nextQueue);
+          setCurrentTargetHighlightId(nextQueue[0]);
+        } else if (deferredHighlights.length > 0) {
+          const shuffledDeferred = [...deferredHighlights].sort(() => Math.random() - 0.5);
+          setHighlightQueue(shuffledDeferred);
+          setCurrentTargetHighlightId(shuffledDeferred[0]);
+          setDeferredHighlights([]);
+          setFeedback({ text: `INITIATING DEFERRED CHANNELS (SHUFFLED SECOND TRY WITH INTEL)`, type: 'info' });
+          setTimeout(() => setFeedback(null), 3000);
+        } else {
+          finishGame();
+        }
+      } else {
+         setFeedback({ text: `INCORRECT GUESS`, type: 'error' });
+         setTimeout(() => setFeedback(null), 1000);
+      }
+      return;
     }
   };
 
@@ -1702,23 +1851,23 @@ export default function App() {
                       <div className="flex items-center gap-1.5">
                         <button 
                           onClick={skipHighlight}
-                          disabled={(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1}
+                          disabled={(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 2}
                           className={cn(
                             "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all group",
-                            (skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1
+                            (skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 2
                               ? "bg-neutral-900 border border-neutral-800 text-neutral-600 cursor-not-allowed"
                               : "bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white cursor-pointer"
                           )}
-                          title={(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1 ? "No runs of evasion remain for this sector." : "Skip this target"}
+                          title={(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 2 ? "No runs of evasion remain for this sector." : "Skip this target"}
                         >
-                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 1 ? "Final Try" : "Skip"}</span>
+                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedHighlightsCount[currentTargetHighlightId || ''] || 0) >= 2 ? "Final Try" : "Skip"}</span>
                           <Shuffle className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" />
                         </button>
                       </div>
                    </div>
                 </motion.div>
 
-                {currentTargetHighlightId && (skippedHighlightsCount[currentTargetHighlightId] || 0) >= 1 && (
+                {currentTargetHighlightId && (skippedHighlightsCount[currentTargetHighlightId] || 0) === 1 && (
                   <motion.div 
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
@@ -1750,6 +1899,31 @@ export default function App() {
                           </>
                         );
                       })()}
+                    </div>
+                  </motion.div>
+                )}
+
+                {currentTargetHighlightId && (skippedHighlightsCount[currentTargetHighlightId] || 0) >= 2 && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="p-4 bg-neutral-900 border border-emerald-500/30 rounded-xl space-y-3 mb-4 text-left"
+                  >
+                    <div className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <Brain className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+                      Sovereign Decryption Options (4-Choice Interface)
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {multipleChoiceOptions.map((opt, idx) => (
+                        <button
+                          key={idx}
+                          id={`decrypt-highlight-option-${idx}`}
+                          onClick={() => handleOptionSelect(opt)}
+                          className="px-3 py-2 text-center text-[10px] font-mono font-bold uppercase tracking-wider bg-neutral-800 hover:bg-emerald-950/40 hover:border-emerald-500/50 border border-neutral-700/50 rounded-xl transition-all cursor-pointer text-neutral-200 hover:text-emerald-300"
+                        >
+                          {opt}
+                        </button>
+                      ))}
                     </div>
                   </motion.div>
                 )}
@@ -1800,23 +1974,23 @@ export default function App() {
                         </button>
                         <button 
                           onClick={skipFlag}
-                          disabled={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1}
+                          disabled={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2}
                           className={cn(
                             "flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all group",
-                            (skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1
+                            (skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2
                               ? "bg-neutral-900 border border-neutral-800 text-neutral-600 cursor-not-allowed"
                               : "bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white cursor-pointer"
                           )}
-                          title={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1 ? "No runs of evasion remain for this flag." : "Skip this flag"}
+                          title={(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2 ? "No runs of evasion remain for this flag." : "Skip this flag"}
                         >
-                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 1 ? "Final Try" : "Skip"}</span>
+                          <span className="text-[8px] font-bold uppercase tracking-wider">{(skippedFlagsCount[currentTargetFlagId || ''] || 0) >= 2 ? "Final Try" : "Skip"}</span>
                           <Shuffle className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" />
                         </button>
                       </div>
                    </div>
                 </motion.div>
 
-                    {currentTargetFlagId && (skippedFlagsCount[currentTargetFlagId] || 0) >= 1 && (
+                    {currentTargetFlagId && (skippedFlagsCount[currentTargetFlagId] || 0) === 1 && (
                       <motion.div 
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
@@ -1848,6 +2022,31 @@ export default function App() {
                               </>
                             );
                           })()}
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {currentTargetFlagId && (skippedFlagsCount[currentTargetFlagId] || 0) >= 2 && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-4 bg-neutral-900 border border-emerald-500/30 rounded-xl space-y-3 mb-4 text-left"
+                      >
+                        <div className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Brain className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+                          Sovereign Decryption Options (4-Choice Interface)
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {multipleChoiceOptions.map((opt, idx) => (
+                            <button
+                              key={idx}
+                              id={`decrypt-flag-option-${idx}`}
+                              onClick={() => handleOptionSelect(opt)}
+                              className="px-3 py-2 text-center text-[10px] font-mono font-bold uppercase tracking-wider bg-neutral-800 hover:bg-emerald-950/40 hover:border-emerald-500/50 border border-neutral-700/50 rounded-xl transition-all cursor-pointer text-neutral-200 hover:text-emerald-300"
+                            >
+                              {opt}
+                            </button>
+                          ))}
                         </div>
                       </motion.div>
                     )}

@@ -1,530 +1,87 @@
 # GEO-CORE: Global Surveillance & Identification Protocol (V4.5)
 
-**Live Mission Link:** [GEO-CORE Live Mission Interface](https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app?utm_source=chatgpt.com)
+**Live Mission Link:** [https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app](https://ais-pre-hvbywr5xj3y6fnehkuokdd-760174548296.europe-west2.run.app)
 
-GEO-CORE is a high-precision, interactive world geography simulation engineered for operatives to test territorial identification speed, geopolitical awareness, and strategic expansion efficiency. Built with a tactical cyber-industrial aesthetic, the system combines real-time geospatial rendering, alliance intelligence overlays, economic analytics, synchronized cloud persistence, and dynamic 3D globe systems into a unified command interface.
-
-The platform transforms world geography into a live operational theater where every identified sovereign territory contributes to territorial control, economic dominance, alliance influence, mission efficiency, and geopolitical intelligence analysis.
+GEO-CORE is a high-precision, interactive world geography simulation designed for operatives to test their territorial identification speed and accuracy. Built with a tactical "cyber-industrial" aesthetic, it utilizes advanced geospatial data and real-time cloud synchronization to track global dominance.
 
 ---
 
-# 🌍 Core Operational Concept
+## 🚀 The Protocol: Game Logic & Mechanics
 
-GEO-CORE is not designed as a traditional quiz game.
+### 1. The "Tetra-Pillar" Scoring Algorithm
+Every territory identified contributes to a complex multidimensional score. Your performance is measured across four tactical vectors:
 
-It functions as a live geopolitical command simulation where players progressively secure the globe through rapid territorial identification, alliance analysis, and strategic expansion planning.
+*   **📏 Territorial Magnitude (25%)**: Percentage of total global landmass (~148.9M km²) secured. Identifying large landmasses like Russia or Canada provides massive baseline points.
+*   **💰 Economic Dominance (25%)**: Percentage of global GDP (~$110 Trillion) secured. Tactical priority on economic powerhouses (USA, China, Japan) boosts this metric significantly.
+*   **🎯 Strategic Volume (25%)**: Raw count of successfully identified sovereign sectors. Essential for maintaining momentum and climbing the ranks.
+*   **⚡ Operational Efficiency (25%)**: 
+    - **Speed Multiplier**: Points decay over time in Challenge Mode.
+    - **Difficulty Scaling**: Small, "Hard-to-Focus" territories (Micro-states like Vatican City or Monaco) receive an inverse-area bonus multiplier.
 
-Every successful identification dynamically updates:
-
-* Global territorial control
-* Economic influence
-* Continental dominance
-* Alliance penetration
-* Strategic mission analytics
-* Operational efficiency ratings
-* Geopolitical influence structures
-
-The system emphasizes:
-
-* Geographic precision
-* Global political awareness
-* Economic understanding
-* Alliance intelligence
-* Speed-based tactical execution
-* Strategic map control
+### 2. Operational Modes
+- **Zen Mode (Infinite)**: No time constraints. Focused on 100% precision and global clearance. Point multiplier: **1.0x**.
+- **Challenge Mode (Timed)**: Choice of 5, 10, or 20-minute mission windows. Dynamic scaling multipliers from **1.2x to 2.0x** based on the intensity of the time limit.
 
 ---
 
-# 🚀 The Protocol: Game Logic & Mechanics
+## 📡 Tactical Features
 
-## 1. The "Tetra-Pillar" Scoring Algorithm
+### 1. Visual Intelligence Suite
+- **Globe Protocol (3D)**: Interactive 3D globe mode with smooth rotation and zooming. Toggle with the Globe icon or `[CMD/CTRL+G]`.
+- **D3.js Geospatial Engine**: High-performance TopoJSON rendering with custom "Orthographic" and "Equirectangular" projection transitions.
+- **Satellite Overlay**: Real-time toggleable satellite imagery for terrain verification and landmark spotting.
+- **The "Command Center" Input**: Predictive data entry supporting official names, ISO-3166 alpha-3 codes, and tactical aliases.
+- **Authentication Feedback**: High-resolution 160px flag verification pulse (2-second duration) upon successful identification.
 
-Every territory identified contributes to a multidimensional scoring framework. Mission performance is evaluated across four strategic vectors:
+### 2. Intelligence Archive (Mission Logs)
+- **Hybrid Storage Protocol**: Your missions are secured using both `Cloud Firestore` (for logged-in operatives) and `LocalStorage` (for anonymous field agents).
+- **Mission Designation**: Full control over your records. Hover over any mission name in the Tactical Logs to **Rename** the protocol (e.g., "Pacific Expansion Plan").
+- **Intel Search**: Within any archived mission, use the identification terminal to search for specific territories to verify their "Secured" or "Missing" status from that session.
 
----
-
-### 📏 Territorial Magnitude (25%)
-
-Percentage of total global landmass (~148.9M km²) secured.
-
-High-area nations such as:
-
-* Russia
-* Canada
-* China
-* United States
-* Brazil
-
-provide massive territorial gains and accelerated map dominance.
-
----
-
-### 💰 Economic Dominance (25%)
-
-Percentage of global GDP (~$110 Trillion) secured.
-
-Economic superpowers dramatically amplify mission output:
-
-* United States
-* China
-* Germany
-* Japan
-* India
-
-GDP weighting creates strategic prioritization decisions during timed operations.
+### 3. Expansion Survey (Debriefing)
+After every mission, a deep-dive analysis is provided:
+- **Continental Drill-Down**: Interactive continental sectors with specific metrics for Landmass and GDP coverage per region.
+- **Sector Track & Trace**: A specialized search bar within the survey to instantly locate and highlight any territory on the survey map.
+- **Advanced Sorting Protocols**:
+    - **Alpha-Sort**: Standard A-Z manifest.
+    - **Wealth-Sort**: Prioritize territories by their economic output (GDP).
 
 ---
 
-### 🎯 Strategic Volume (25%)
+## ⌨️ Command Shortcuts (Strategic Control)
 
-Raw count of identified sovereign sectors.
-
-Focused on:
-
-* Identification consistency
-* Territory completion rates
-* Global saturation efficiency
-* Continental coverage balance
-
----
-
-### ⚡ Operational Efficiency (25%)
-
-#### Speed Multiplier
-
-Challenge Mode introduces real-time score decay mechanics rewarding rapid execution speed.
-
-#### Difficulty Scaling
-
-Small and hard-to-target territories receive inverse-area bonus weighting:
-
-* Vatican City
-* Monaco
-* Nauru
-* Tuvalu
-* Liechtenstein
-
-Microstates become disproportionately valuable tactical targets.
+| Key | Action |
+| :--- | :--- |
+| `[ENTER] / [SPACE]` | **Focus Identification Terminal** |
+| `[CMD / CTRL] + [G]` | **Toggle Globe Mode (3D)** |
+| `[CMD / CTRL] + [X]` | **Toggle Satellite Intelligence Overlay** |
+| `[ALT / OPTION]` | **Strategic Pause / Resume (Challenge Mode)** |
+| `[ARROW KEYS]` | **Fluid Map Panning** |
+| `[+] / [-]` | **Micro/Macro Zooming** |
+| `[ESCAPE]` | **Clear Input / Close Modals** |
 
 ---
 
-# 🌐 Alliance Intelligence System
+## 🛠 Strategic Tech Stack
 
-GEO-CORE includes an integrated geopolitical alliance analysis framework that transforms the platform into a strategic geopolitical intelligence engine.
-
----
-
-## Supported Alliance Structures
-
-Operational alliance analysis includes:
-
-* United Nations
-* NATO
-* European Union
-* MERCOSUR
-* Collective Security Treaty Organization
-* Alliance of Sahel States
-* ASEAN
-* Shanghai Cooperation Organisation
-* Organization of American States
-* Gulf Cooperation Council
-* Arab League
+- **Framework**: React 18+ (Vite)
+- **Language**: TypeScript (Strict Typing)
+- **Geospatial**: D3.js & TopoJSON
+- **Intelligence Persistence**: Firebase Firestore (NoSQL)
+- **Credential Management**: Firebase Google Auth
+- **Motion Engine**: Motion for React (Tactical UI transitions)
+- **Styling**: Tailwind CSS (Cyan/Emerald Tactical Theme)
 
 ---
 
-## 🛰 Alliance Visualization Engine
+## 📡 Operational Support & Quotas
 
-### Interactive Alliance Plotting
+Controlled by the **Firebase Spark Protocol**:
+*   **Operational Reads**: 50,000 / day (Reset at 00:00 PST)
+*   **Operational Writes**: 20,000 / day
+*   **Identity Provisioning**: Unlimited via Google Identity Service
 
-Alliance structures can be visualized directly on the operational map.
-
-Selecting an alliance dynamically:
-
-* Highlights all member territories
-* Displays geopolitical clustering
-* Reveals strategic regional influence
-* Enables instant alliance-wide territorial inspection
-
-This creates a live geopolitical awareness layer over the territorial simulation.
+> **Officer Note**: If "Quota Exceeded" alerts trigger, all active intelligence syncing will pause until the next tactical day.
 
 ---
-
-## 📊 Alliance Metrics Dashboard
-
-Each alliance contains dedicated intelligence metrics:
-
-### Available Metrics
-
-* Combined GDP
-* Aggregate landmass
-* Member count
-* Continental influence spread
-* Territory control percentage
-* Alliance penetration during missions
-* Comparative alliance dominance
-
-Players can evaluate geopolitical bloc dominance during active missions.
-
-Example:
-
-* NATO coverage secured
-* EU economic control achieved
-* ASEAN territorial penetration
-* SCO influence captured
-
----
-
-## 🧠 Post-Mission Alliance Intelligence
-
-After mission completion, GEO-CORE generates alliance-specific strategic analysis.
-
-### Debrief Includes
-
-* Alliance penetration statistics
-* Captured vs missing alliance members
-* Geopolitical influence breakdown
-* Alliance economic weight secured
-* Regional dominance reports
-* Strategic facts and intelligence summaries
-
-Example insights:
-
-* “You secured 82% of NATO GDP.”
-* “ASEAN achieved full territorial clearance.”
-* “Only 2 CSTO members remain unidentified.”
-
----
-
-# 🎮 Operational Modes
-
-## Zen Mode (Infinite)
-
-No time restrictions.
-
-Optimized for:
-
-* Full global completion
-* Strategic exploration
-* Alliance analysis
-* Precision-focused gameplay
-
-Point Multiplier: **1.0x**
-
----
-
-## Challenge Mode (Timed)
-
-Mission windows:
-
-* 5 Minutes
-* 10 Minutes
-* 20 Minutes
-
-Dynamic tactical multipliers:
-
-* **1.2x → 2.0x**
-
-Designed for:
-
-* Speed operations
-* Competitive score optimization
-* Rapid alliance dominance strategies
-
----
-
-# 📡 Tactical Features
-
-# 1. Visual Intelligence Suite
-
----
-
-## 🌐 Globe Protocol (3D)
-
-Interactive 3D globe visualization system featuring:
-
-* Smooth rotational controls
-* Adjustable globe rotation systems
-* Dynamic zoom transitions
-* Real-time drag rotation
-* Orthographic tactical rendering
-* Cinematic movement interpolation
-* Inertia-based rotational responsiveness
-
-Shortcut:
-`[CMD/CTRL + G]`
-
----
-
-## 🌍 Globe Rotation Control System
-
-The operational globe engine includes dynamic rotational behavior for tactical navigation.
-
-### Rotation Capabilities
-
-* Continuous globe rotation toggling
-* Interactive drag-based rotation
-* Momentum-driven camera movement
-* Smooth interpolation transitions
-* Adjustable rotational responsiveness
-* Zoom-aware rotational scaling
-
-### Rotation Architecture
-
-Powered through:
-
-* D3.js projection transforms
-* Motion interpolation systems
-* Orthographic sphere calculations
-* Real-time animation smoothing
-
-Shortcut:
-`[CMD/CTRL + B]`
-
----
-
-## 🗺 Tactical Navigation & Panning System
-
-Advanced geospatial movement systems allow operatives to fluidly navigate the world theater.
-
-### Navigation Features
-
-* Smooth directional panning
-* Responsive keyboard navigation
-* Tactical drag movement
-* Precision zoom controls
-* Projection-aware movement scaling
-* Globe-to-map transition continuity
-
-### Tactical Controls
-
-* `[ARROW KEYS]` → Fluid Map Panning
-* `[+] / [-]` → Micro/Macro Zooming
-
-Movement systems are optimized for both:
-
-* Orthographic globe projection
-* Equirectangular flat-world projection
-
----
-
-## 🗺 D3.js Geospatial Engine
-
-High-performance rendering system using:
-
-* TopoJSON optimization
-* Orthographic projection
-* Equirectangular transitions
-* Real-time geopolitical overlays
-* Smooth projection morphing
-* Dynamic territorial rendering
-
----
-
-## 🛰 Satellite Intelligence Overlay
-
-Toggleable terrain visualization layer for:
-
-* Landmark recognition
-* Terrain awareness
-* Geographic verification
-* Terrain-assisted identification
-
-Shortcut:
-`[CMD/CTRL + X]`
-
----
-
-## ⌨ Command Center Identification Terminal
-
-Predictive identification system supporting:
-
-* Official country names
-* ISO-3166 Alpha-3 codes
-* Tactical aliases
-* Rapid autocomplete targeting
-
-The platform functions as a live “Guess the Country” intelligence simulation where rapid recognition and precision input directly impact mission success.
-
----
-
-## 🚩 Authentication Pulse
-
-Successful identifications trigger:
-
-* 160px HD flag verification
-* Tactical confirmation pulse
-* Smooth UI transition feedback
-* High-visibility authentication animation
-
----
-
-# 🗂 Intelligence Archive (Mission Logs)
-
-## Hybrid Persistence Protocol
-
-Mission records are stored through:
-
-* Firebase Cloud Firestore (authenticated operatives)
-* LocalStorage fallback (anonymous agents)
-
----
-
-## Mission Designation System
-
-Archived operations can be renamed dynamically:
-
-Examples:
-
-* “Pacific Expansion Plan”
-* “Operation Arctic Sweep”
-* “Economic Containment Run”
-
----
-
-## Tactical Intel Search
-
-Inside archived missions, operatives can:
-
-* Search territories
-* Verify secured states
-* Locate missing targets
-* Review alliance penetration status
-
----
-
-# 📈 Expansion Survey (Mission Debrief)
-
-Every completed mission generates a strategic intelligence report.
-
----
-
-## Continental Drill-Down
-
-Interactive regional analysis:
-
-* Landmass secured
-* GDP secured
-* Completion percentages
-* Regional operational efficiency
-
----
-
-## Sector Track & Trace
-
-Integrated search system for:
-
-* Instant territory lookup
-* Map highlighting
-* Mission verification workflows
-
----
-
-## Advanced Sorting Protocols
-
-### Alpha-Sort
-
-Standard A-Z manifest ordering.
-
-### Wealth-Sort
-
-Economic prioritization using GDP hierarchy.
-
-### Alliance-Sort
-
-Organize territories based on geopolitical alliance membership and influence structures.
-
----
-
-# 🧠 Strategic Intelligence Layer
-
-GEO-CORE incorporates educational and geopolitical intelligence systems beyond simple geography gameplay.
-
-The platform enables:
-
-* Understanding geopolitical blocs
-* Recognizing economic concentrations
-* Learning alliance structures
-* Visualizing global influence patterns
-* Studying continental power distributions
-* Developing rapid geopolitical recognition skills
-* Training territorial memory retention
-
-This transforms gameplay into an interactive geopolitical analytics environment.
-
----
-
-# ⌨️ Command Shortcuts (Strategic Control)
-
-| Key                  | Action                                |
-| :------------------- | :------------------------------------ |
-| `[ENTER] / [SPACE]`  | Focus Identification Terminal         |
-| `[CMD / CTRL] + [G]` | Toggle Globe Mode (3D)                |
-| `[CMD / CTRL] + [X]` | Toggle Satellite Intelligence Overlay |
-| `[CMD / CTRL] + [B]` | Toggle Globe Rotation                 |
-| `[ALT / OPTION]`     | Strategic Pause / Resume              |
-| `[ARROW KEYS]`       | Fluid Map Panning                     |
-| `[+] / [-]`          | Micro/Macro Zooming                   |
-| `[ESCAPE]`           | Clear Input / Close Modals            |
-
----
-
-# 🛠 Strategic Tech Stack
-
-## Frontend Infrastructure
-
-* React 18+
-* Vite
-* TypeScript (Strict Typing)
-
----
-
-## Geospatial & Visualization
-
-* D3.js
-* TopoJSON
-
----
-
-## Backend & Persistence
-
-* Firebase Firestore
-* Firebase Google Authentication
-
----
-
-## UI / Motion Systems
-
-* Motion for React
-* Tailwind CSS
-* Tactical Cyan/Emerald Interface System
-
----
-
-# 🔮 Planned Future Expansions
-
-Potential protocol upgrades include:
-
-* Real-time multiplayer operations
-* Global leaderboard synchronization
-* Historical empire overlays
-* AI-generated geopolitical scenarios
-* Fog-of-war intelligence systems
-* Dynamic border evolution simulations
-* Population density heatmaps
-* Alliance conflict simulations
-* Economic sanction mechanics
-* Strategic resource distribution layers
-
----
-
-# 🛡 Mission Objective
-
-Secure the planet.
-Dominate the economy.
-Analyze alliances.
-Master geopolitical intelligence.
-
----
-
-**[GEO-CORE]**
-*v4.5 — Security Clearance Level 4 Required.*
+**[GEO-CORE]** *v4.5 - Security Clearance Level 4 Required.*
