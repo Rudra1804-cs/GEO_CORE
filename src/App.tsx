@@ -1859,10 +1859,10 @@ export default function App() {
                        <span className="text-[8px] text-neutral-700 font-mono">Queue Buffer: {Math.max(0, flagQueue.length - 1)}</span>
                      </div>
                      <div className="flex gap-2 items-center overflow-x-auto pb-2 scrollbar-hide">
-                        {flagQueue.slice(1, 6).map((id) => (
+                        {flagQueue.slice(1, 6).map((id, idx) => (
                            <motion.div 
-                             layoutId={id}
-                             key={id} 
+                             layoutId={`${id}-${idx}`}
+                             key={`${id}-${idx}`} 
                              className="w-12 aspect-[3/2] shrink-0 rounded-md border border-neutral-800/50 bg-neutral-900/50 grayscale opacity-40 overflow-hidden"
                            >
                               <img 
@@ -2251,7 +2251,7 @@ export default function App() {
                     <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                       {leaderboard.map((entry, i) => (
                         <div 
-                          key={entry.id || `${entry.name}-${i}`}
+                          key={entry.id ? `${entry.id}-${i}` : `${entry.name}-${i}`}
                           role="button"
                           tabIndex={0}
                           onClick={() => {
@@ -2408,6 +2408,7 @@ export default function App() {
                                projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
                                isMemoryMode={false}
                                isPaused={false}
+                               isSatelliteView={isSatelliteView}
                              />
                              <div className="absolute top-4 right-4 bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-4 rounded-xl shadow-xl">
                                <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest mb-3">Territorial Analysis</div>
@@ -2525,6 +2526,7 @@ export default function App() {
                   highlightedAllianceMemberIds={highlightedAllianceMemberIds}
                   plotContinentsColorMode={plotContinentsColorMode}
                   gameType={gameType}
+                  isSatelliteView={isSatelliteView}
                 />
               
                 {/* Interactive Overlays */}
@@ -2810,6 +2812,7 @@ export default function App() {
                                   isFinished={true} 
                                   focusedContinent={focusedContinent === "GLOBAL" ? null : focusedContinent}
                                   projectionType={isGlobeMode ? 'orthographic' : 'mercator'}
+                                  isSatelliteView={isSatelliteView}
                                   isMemoryMode={false}
                                   isPaused={false}
                                 />
@@ -3241,6 +3244,7 @@ export default function App() {
                       isPaused={false}
                       highlightedAllianceMemberIds={highlightedAllianceMemberIds}
                       plotContinentsColorMode={plotContinentsColorMode}
+                      isSatelliteView={isSatelliteView}
                     />
 
                     <button 

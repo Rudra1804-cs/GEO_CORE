@@ -19,6 +19,7 @@ interface WorldMapProps {
   highlightedAllianceMemberIds?: Set<string> | null;
   plotContinentsColorMode?: boolean;
   gameType?: 'typing' | 'flag' | 'highlight';
+  isSatelliteView?: boolean;
 }
 
 const CONTINENT_FILL_COLORS: Record<string, string> = {
@@ -52,7 +53,8 @@ export function WorldMap({
   isPaused = false,
   highlightedAllianceMemberIds = null,
   plotContinentsColorMode = false,
-  gameType
+  gameType,
+  isSatelliteView = false
 }: WorldMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -88,8 +90,31 @@ export function WorldMap({
   const rotationSpeedFactorRef = useRef(1.0);
   const [forceCenterTrigger, setForceCenterTrigger] = useState(0);
   const manualPanTriggeredRef = useRef(false);
-  const [autoPanEnabled, setAutoPanEnabled] = useState(false);
+
+  const [autoPanEnabled, setAutoPanEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem('geo_core_auto_pan_enabled');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleAutoPan = () => {
+    setAutoPanEnabled(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('geo_core_auto_pan_enabled', String(next));
+      } catch (e) {
+        // ignore
+      }
+      return next;
+    });
+  };
+
   const isCenteringRef = useRef(false);
+  const isDraggingRef = useRef(false);
+  const isZoomingRef = useRef(false);
 
   const handleSpeedChange = (val: number) => {
     setRotationSpeedFactor(val);
@@ -293,7 +318,17 @@ export function WorldMap({
         .attr('height', height)
         .attr('viewBox', `0 0 ${width} ${height}`);
 
-      if (!projectionRef.current) {
+      if (projectionRef.current) {
+        projectionRef.current.translate([width / 2, height / 2]);
+        if (projectionType !== 'orthographic') {
+          projectionRef.current.scale(width / 2 / Math.PI);
+        }
+        const path = d3.geoPath().projection(projectionRef.current);
+        if (gRef.current) {
+          gRef.current.selectAll('path').attr('d', path as any);
+        }
+        updateMapColors(true);
+      } else {
         let projection: d3.GeoProjection;
         if (projectionType === 'orthographic') {
           projection = d3.geoOrthographic()
@@ -364,6 +399,13 @@ export function WorldMap({
 
     const zoomListener = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([1, 15])
+      .on('start', () => {
+        isZoomingRef.current = true;
+        if (isCenteringRef.current) {
+          isCenteringRef.current = false;
+          d3.select(svgRef.current).interrupt("globe-panning-transition");
+        }
+      })
       .on('zoom', (event) => {
         lastInteractionTimeRef.current = Date.now();
         const proj = projectionRef.current;
@@ -384,6 +426,9 @@ export function WorldMap({
           g.attr('transform', `translate(${tx}, ${y}) scale(${k})`);
           updateMapColors(true);
         }
+      })
+      .on('end', () => {
+        isZoomingRef.current = false;
       });
     zoomListenerRef.current = zoomListener;
 
@@ -391,6 +436,11 @@ export function WorldMap({
       const drag = d3.drag<SVGSVGElement, unknown>()
         .on('start', () => { 
           lastInteractionTimeRef.current = Date.now();
+          isDraggingRef.current = true;
+          if (isCenteringRef.current) {
+            isCenteringRef.current = false;
+            d3.select(svgRef.current).interrupt("globe-panning-transition");
+          }
           svg.style('cursor', 'grabbing'); 
         })
         .on('drag', (event) => {
@@ -410,7 +460,10 @@ export function WorldMap({
           g.selectAll('path').attr('d', p as any);
           updateMapColors(true);
         })
-        .on('end', () => { svg.style('cursor', 'grab'); });
+        .on('end', () => { 
+          isDraggingRef.current = false;
+          svg.style('cursor', 'grab'); 
+        });
       svg.call(drag as any);
       zoomListener.filter((event) => {
         return event.type === 'wheel' || event.ctrlKey || event.type === 'touchstart' || event.type === 'touchmove' || event.type === 'touchend';
@@ -524,9 +577,17 @@ export function WorldMap({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         if (projectionType === 'orthographic') {
-          setShowSpeedDial(prev => !prev);
-          // Ensure rotation is enabled when triggering the dial so they immediately see the response
-          autoRotateRef.current = true;
+          setShowSpeedDial(prev => {
+            const nextShow = !prev;
+            if (nextShow) {
+              autoRotateRef.current = true;
+              handleSpeedChange(1.0);
+            } else {
+              autoRotateRef.current = false;
+              handleSpeedChange(0.0);
+            }
+            return nextShow;
+          });
         }
         return;
       }
@@ -591,6 +652,8 @@ export function WorldMap({
           projectionRef.current && 
           !isPausedRef.current && 
           !isCenteringRef.current && 
+          !isDraggingRef.current && 
+          !isZoomingRef.current && 
           activeKeys.current.size === 0 && 
           (autoRotateRef.current || Date.now() - lastInteractionTimeRef.current > 5000)) {
         const rotate = projectionRef.current.rotate();
@@ -629,11 +692,10 @@ export function WorldMap({
 
   // Handle auto-focus / centering of the globe onto the highlighted nation
   useEffect(() => {
-    if (!mapLoaded || projectionType !== 'orthographic' || !highlightedId || isFinished || !gRef.current || !projectionRef.current || !containerRef.current) return;
+    if (!mapLoaded || projectionType !== 'orthographic' || !highlightedId || !gRef.current || !projectionRef.current || !containerRef.current) return;
     
     // Skip automatic focus during typing/flag modes unless triggered manual pan explicitly OR auto-panning is enabled in selection deck
-    const isPlayingGameType = gameType === 'typing' || gameType === 'flag';
-    if (isPlayingGameType && !manualPanTriggeredRef.current && !autoPanEnabled) {
+    if (!manualPanTriggeredRef.current && !autoPanEnabled) {
       return;
     }
     manualPanTriggeredRef.current = false;
@@ -670,7 +732,8 @@ export function WorldMap({
 
       // Use d3 transition to smoothly rotate to [-lng, -lat] with a slight southward shift to keep the target country up and show the south part more.
       const startRotation = proj.rotate();
-      const targetLat = Math.max(-65, Math.min(65, targetCoords[1] - 8));
+      const latShift = isSatelliteView ? 16 : 8;
+      const targetLat = Math.max(-65, Math.min(65, targetCoords[1] - latShift));
       const endRotation: [number, number, number] = [-targetCoords[0], -targetLat, 0];
 
       // Standardize the shortest rotation path
@@ -695,7 +758,8 @@ export function WorldMap({
         ? startScale
         : (Math.min(width, height) / 2.0);
 
-      d3.transition("globe-panning-transition")
+      d3.select(svgRef.current)
+        .transition("globe-panning-transition")
         .duration(1200)
         .ease(d3.easeCubicInOut)
         .tween("globe-rotate", () => {
@@ -724,7 +788,7 @@ export function WorldMap({
           isCenteringRef.current = false;
         });
     }
-  }, [highlightedId, projectionType, mapLoaded, isFinished, forceCenterTrigger, autoPanEnabled]);
+  }, [highlightedId, projectionType, mapLoaded, isFinished, forceCenterTrigger, autoPanEnabled, isSatelliteView]);
 
   useEffect(() => {
     if (!mapLoaded || !gRef.current || !countriesDataRef.current || !containerRef.current || !svgRef.current) return;
@@ -828,22 +892,22 @@ export function WorldMap({
               </button>
             </div>
 
-             {/* Tactical Panning Options Section */}
-             <div className="flex flex-col gap-2 p-2.5 bg-neutral-900/50 border border-neutral-800/40 rounded-lg">
-               <div className="flex items-center justify-between pb-1.5 border-b border-neutral-800/30">
-                 <span className="text-[8px] text-neutral-500 uppercase tracking-widest font-black">Auto-Panning (Type/Flag)</span>
-                 <button
-                   onClick={() => setAutoPanEnabled(!autoPanEnabled)}
-                   className={cn(
-                     "text-[8px] font-mono px-2 py-0.5 rounded transition-all uppercase border font-bold cursor-pointer",
-                     autoPanEnabled 
-                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_6px_rgba(16,185,129,0.15)]"
-                       : "bg-neutral-950/40 text-neutral-500 border-neutral-850"
-                   )}
-                 >
-                   {autoPanEnabled ? "ENABLED" : "DISABLED"}
-                 </button>
-               </div>
+              {/* Tactical Panning Options Section */}
+              <div className="flex flex-col gap-2 p-2.5 bg-neutral-900/50 border border-neutral-800/40 rounded-lg">
+                <div className="flex items-center justify-between pb-1.5 border-b border-neutral-800/30">
+                  <span className="text-[8px] text-neutral-500 uppercase tracking-widest font-black">Auto-Panning (Type/Flag/Guess/Survey)</span>
+                  <button
+                    onClick={toggleAutoPan}
+                    className={cn(
+                      "text-[8px] font-mono px-2 py-0.5 rounded transition-all uppercase border font-bold cursor-pointer",
+                      autoPanEnabled 
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_6px_rgba(16,185,129,0.15)]"
+                        : "bg-neutral-950/40 text-neutral-500 border-neutral-850"
+                    )}
+                  >
+                    {autoPanEnabled ? "ON" : "OFF"}
+                  </button>
+                </div>
 
                {highlightedId ? (
                  (() => {
