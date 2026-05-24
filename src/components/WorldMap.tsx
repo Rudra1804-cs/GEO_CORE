@@ -85,6 +85,7 @@ export function WorldMap({
   const dimensionsRef = useRef({ width: 0, height: 0 });
   const lastInteractionTimeRef = useRef(Date.now());
   const autoRotateRef = useRef(false);
+  const wasExplicitlyStoppedRef = useRef(false);
   const [showSpeedDial, setShowSpeedDial] = useState(false);
   const [rotationSpeedFactor, setRotationSpeedFactor] = useState(1.0);
   const rotationSpeedFactorRef = useRef(1.0);
@@ -94,10 +95,13 @@ export function WorldMap({
   const [autoPanEnabled, setAutoPanEnabled] = useState(() => {
     try {
       const saved = localStorage.getItem('geo_core_auto_pan_enabled');
-      return saved === 'true';
+      if (saved !== null) {
+        return saved === 'true';
+      }
     } catch {
-      return false;
+      // ignore
     }
+    return true; // Default to true (on by default)
   });
 
   const toggleAutoPan = () => {
@@ -120,6 +124,31 @@ export function WorldMap({
     setRotationSpeedFactor(val);
     rotationSpeedFactorRef.current = val;
   };
+
+  const projectionTypeRef = useRef(projectionType);
+  useEffect(() => {
+    projectionTypeRef.current = projectionType;
+  }, [projectionType]);
+
+  const toggleRotation = () => {
+    const nextRotate = !autoRotateRef.current;
+    autoRotateRef.current = nextRotate;
+    wasExplicitlyStoppedRef.current = !nextRotate;
+    
+    if (nextRotate) {
+      if (rotationSpeedFactorRef.current === 0) {
+        handleSpeedChange(1.0);
+      }
+    } else {
+      handleSpeedChange(0.0);
+    }
+    setForceCenterTrigger(p => p + 1);
+  };
+
+  const toggleRotationRef = useRef(toggleRotation);
+  useEffect(() => {
+    toggleRotationRef.current = toggleRotation;
+  });
 
   useEffect(() => {
     isFinishedRef.current = isFinished;
@@ -322,10 +351,18 @@ export function WorldMap({
         projectionRef.current.translate([width / 2, height / 2]);
         if (projectionType !== 'orthographic') {
           projectionRef.current.scale(width / 2 / Math.PI);
+        } else {
+          projectionRef.current.scale(Math.min(width, height) / 2.5);
         }
         const path = d3.geoPath().projection(projectionRef.current);
         if (gRef.current) {
           gRef.current.selectAll('path').attr('d', path as any);
+          const worldWidth = 2 * Math.PI * projectionRef.current.scale();
+          gRef.current.selectAll('.world-instance')
+            .attr('transform', (d: any) => {
+              if (projectionType === 'orthographic') return '';
+              return `translate(${d * worldWidth}, 0)`;
+            });
         }
         updateMapColors(true);
       } else {
@@ -533,18 +570,36 @@ export function WorldMap({
         .attr('stroke-width', 0.5)
         .on('mouseenter', function(event, d: any) {
           if (!isFinishedRef.current) return;
-          if (tooltipTimeoutRef.current) { clearTimeout(tooltipTimeoutRef.current); tooltipTimeoutRef.current = null; }
+          if (tooltipTimeoutRef.current) { 
+            clearTimeout(tooltipTimeoutRef.current); 
+            tooltipTimeoutRef.current = null; 
+          }
           const id = String(d.id).padStart(3, '0');
           const country = COUNTRIES.find(c => c.id === id);
-          if (country) setTooltip({ name: country.name, x: event.clientX, y: event.clientY - 35 });
+          if (country) {
+            setTooltip({ name: country.name, x: event.clientX, y: event.clientY - 35 });
+            tooltipTimeoutRef.current = setTimeout(() => { 
+              setTooltip(null); 
+            }, 2000);
+          }
         })
         .on('mousemove', function(event) {
           if (!isFinishedRef.current) return;
           setTooltip(prev => prev ? { ...prev, x: event.clientX, y: event.clientY - 35 } : null);
+          if (tooltipTimeoutRef.current) { 
+            clearTimeout(tooltipTimeoutRef.current); 
+          }
+          tooltipTimeoutRef.current = setTimeout(() => { 
+            setTooltip(null); 
+          }, 2000);
         })
         .on('mouseleave', function() {
           if (!isFinishedRef.current) return;
-          tooltipTimeoutRef.current = setTimeout(() => { setTooltip(null); }, 2000);
+          if (tooltipTimeoutRef.current) { 
+            clearTimeout(tooltipTimeoutRef.current); 
+            tooltipTimeoutRef.current = null; 
+          }
+          setTooltip(null);
         })
         .on('click', function(event, d: any) {
           if (!isFinishedRef.current || !onCountryClick) return;
@@ -576,18 +631,9 @@ export function WorldMap({
       // Toggle rotation with Cmd+B or Ctrl+B - works even if typing
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
-        if (projectionType === 'orthographic') {
-          setShowSpeedDial(prev => {
-            const nextShow = !prev;
-            if (nextShow) {
-              autoRotateRef.current = true;
-              handleSpeedChange(1.0);
-            } else {
-              autoRotateRef.current = false;
-              handleSpeedChange(0.0);
-            }
-            return nextShow;
-          });
+        e.stopPropagation();
+        if (projectionTypeRef.current === 'orthographic') {
+          toggleRotationRef.current();
         }
         return;
       }
@@ -655,7 +701,7 @@ export function WorldMap({
           !isDraggingRef.current && 
           !isZoomingRef.current && 
           activeKeys.current.size === 0 && 
-          (autoRotateRef.current || Date.now() - lastInteractionTimeRef.current > 5000)) {
+          (autoRotateRef.current || (!wasExplicitlyStoppedRef.current && Date.now() - lastInteractionTimeRef.current > 5000))) {
         const rotate = projectionRef.current.rotate();
         const speed = 0.015 * rotationSpeedFactorRef.current;
         const nextRotate: [number, number, number] = [rotate[0] + speed, rotate[1], rotate[2]];
@@ -1025,10 +1071,7 @@ export function WorldMap({
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => {
-                      autoRotateRef.current = !autoRotateRef.current;
-                      if (autoRotateRef.current && rotationSpeedFactor === 0) {
-                        handleSpeedChange(1.0);
-                      }
+                      toggleRotation();
                     }}
                     className={cn(
                       "p-2 rounded-lg border flex items-center justify-center cursor-pointer transition-all",
@@ -1055,7 +1098,13 @@ export function WorldMap({
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
                         handleSpeedChange(val);
-                        if (val > 0) autoRotateRef.current = true;
+                        if (val > 0) {
+                          autoRotateRef.current = true;
+                          wasExplicitlyStoppedRef.current = false;
+                        } else {
+                          autoRotateRef.current = false;
+                          wasExplicitlyStoppedRef.current = true;
+                        }
                       }}
                       className="w-full accent-emerald-500 h-1 bg-neutral-800 rounded-lg cursor-pointer appearance-none outline-none"
                     />
@@ -1075,8 +1124,13 @@ export function WorldMap({
                       key={i}
                       onClick={() => {
                         handleSpeedChange(p.val);
-                        if (p.val > 0) autoRotateRef.current = true;
-                        else autoRotateRef.current = false;
+                        if (p.val > 0) {
+                          autoRotateRef.current = true;
+                          wasExplicitlyStoppedRef.current = false;
+                        } else {
+                          autoRotateRef.current = false;
+                          wasExplicitlyStoppedRef.current = true;
+                        }
                       }}
                       className={cn(
                         "py-1 text-[8px] font-bold rounded border transition-all cursor-pointer uppercase text-center",
