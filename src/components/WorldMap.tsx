@@ -20,6 +20,14 @@ interface WorldMapProps {
   plotContinentsColorMode?: boolean;
   gameType?: 'typing' | 'flag' | 'highlight';
   isSatelliteView?: boolean;
+  infectedIds?: Set<string>;
+  supplyChainStartId?: string | null;
+  supplyChainEndId?: string | null;
+  supplyChainActiveId?: string | null;
+  supplyChainPathIds?: Set<string>;
+  supplyChainDecayIds?: Set<string>;
+  supplyChainChokeIds?: Set<string>;
+  shieldedIds?: Set<string>;
 }
 
 const CONTINENT_FILL_COLORS: Record<string, string> = {
@@ -54,8 +62,17 @@ export function WorldMap({
   highlightedAllianceMemberIds = null,
   plotContinentsColorMode = false,
   gameType,
-  isSatelliteView = false
+  isSatelliteView = false,
+  infectedIds = new Set(),
+  supplyChainStartId = null,
+  supplyChainEndId = null,
+  supplyChainActiveId = null,
+  supplyChainPathIds = new Set(),
+  supplyChainDecayIds = new Set(),
+  supplyChainChokeIds = new Set(),
+  shieldedIds = new Set()
 }: WorldMapProps) {
+  const [mapLoaded, setMapLoaded] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const gRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
@@ -67,6 +84,48 @@ export function WorldMap({
   const isPausedRef = useRef(isPaused);
   const highlightedAllianceMemberIdsRef = useRef(highlightedAllianceMemberIds);
   const plotContinentsColorModeRef = useRef(plotContinentsColorMode);
+
+  const infectedIdsRef = useRef(infectedIds);
+  const shieldedIdsRef = useRef(shieldedIds);
+  const supplyChainStartIdRef = useRef(supplyChainStartId);
+  const supplyChainEndIdRef = useRef(supplyChainEndId);
+  const supplyChainActiveIdRef = useRef(supplyChainActiveId);
+  const supplyChainPathIdsRef = useRef(supplyChainPathIds);
+  const supplyChainDecayIdsRef = useRef(supplyChainDecayIds);
+  const supplyChainChokeIdsRef = useRef(supplyChainChokeIds);
+
+  useEffect(() => { 
+    infectedIdsRef.current = infectedIds; 
+    if (mapLoaded) updateMapColors(true);
+  }, [infectedIds, mapLoaded]);
+  useEffect(() => { 
+    shieldedIdsRef.current = shieldedIds; 
+    if (mapLoaded) updateMapColors(true);
+  }, [shieldedIds, mapLoaded]);
+  useEffect(() => { 
+    supplyChainStartIdRef.current = supplyChainStartId; 
+    if (mapLoaded) updateMapColors(true);
+  }, [supplyChainStartId, mapLoaded]);
+  useEffect(() => { 
+    supplyChainEndIdRef.current = supplyChainEndId; 
+    if (mapLoaded) updateMapColors(true);
+  }, [supplyChainEndId, mapLoaded]);
+  useEffect(() => { 
+    supplyChainActiveIdRef.current = supplyChainActiveId; 
+    if (mapLoaded) updateMapColors(true);
+  }, [supplyChainActiveId, mapLoaded]);
+  useEffect(() => { 
+    supplyChainPathIdsRef.current = supplyChainPathIds; 
+    if (mapLoaded) updateMapColors(true);
+  }, [supplyChainPathIds, mapLoaded]);
+  useEffect(() => { 
+    supplyChainDecayIdsRef.current = supplyChainDecayIds; 
+    if (mapLoaded) updateMapColors(true);
+  }, [supplyChainDecayIds, mapLoaded]);
+  useEffect(() => { 
+    supplyChainChokeIdsRef.current = supplyChainChokeIds; 
+    if (mapLoaded) updateMapColors(true);
+  }, [supplyChainChokeIds, mapLoaded]);
 
   const countryContinentMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -81,7 +140,6 @@ export function WorldMap({
   const [tooltip, setTooltip] = useState<{ name: string; x: number; y: number } | null>(null);
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [mapLoaded, setMapLoaded] = useState(false);
   const dimensionsRef = useRef({ width: 0, height: 0 });
   const lastInteractionTimeRef = useRef(Date.now());
   const autoRotateRef = useRef(false);
@@ -156,15 +214,18 @@ export function WorldMap({
 
   useEffect(() => {
     guessedIdsRef.current = guessedIds;
-  }, [guessedIds]);
+    if (mapLoaded) updateMapColors(true);
+  }, [guessedIds, mapLoaded]);
 
   useEffect(() => {
     isMemoryModeRef.current = isMemoryMode;
-  }, [isMemoryMode]);
+    if (mapLoaded) updateMapColors(true);
+  }, [isMemoryMode, mapLoaded]);
 
   useEffect(() => {
     highlightedIdRef.current = highlightedId;
-  }, [highlightedId]);
+    if (mapLoaded) updateMapColors(true);
+  }, [highlightedId, mapLoaded]);
 
   useEffect(() => {
     highlightedAllianceMemberIdsRef.current = highlightedAllianceMemberIds;
@@ -201,6 +262,36 @@ export function WorldMap({
           return '#facc15';
         }
 
+        // Supply Chain Intercept State fills
+        if (supplyChainActiveIdRef.current === id) {
+          return '#fbbf24'; // Glowing golden-yellow for active routing head
+        }
+        if (supplyChainStartIdRef.current === id) {
+          return '#22c55e'; // Bright green for Start
+        }
+        if (supplyChainEndIdRef.current === id) {
+          return '#3b82f6'; // Bright blue for End
+        }
+        if (supplyChainPathIdsRef.current && supplyChainPathIdsRef.current.has(id)) {
+          return '#059669'; // Emerald path
+        }
+        if (supplyChainDecayIdsRef.current && supplyChainDecayIdsRef.current.has(id)) {
+          return '#7f1d1d'; // Dark decayed red
+        }
+        if (supplyChainChokeIdsRef.current && supplyChainChokeIdsRef.current.has(id)) {
+          return '#eab308'; // Vibrant yellow for Blockades/Choke Points (Temporary Crisis)
+        }
+
+        // Rogue Mode infected fills
+        if (infectedIdsRef.current && infectedIdsRef.current.has(id)) {
+          return '#ef4444'; // Active aggressive infection red
+        }
+
+        // Rogue Mode shielded/firewalled fills
+        if (shieldedIdsRef.current && shieldedIdsRef.current.has(id)) {
+          return '#06b6d4'; // Active cyan firewall shield
+        }
+
         if (plotContinentsColorModeRef.current) {
           const continent = countryContinentMap.get(id);
           if (continent && CONTINENT_FILL_COLORS[continent]) {
@@ -228,6 +319,32 @@ export function WorldMap({
         if (highlightedIdRef.current === id) {
           if (isPausedRef.current && isMemoryModeRef.current) return '#404040';
           return '#eab308';
+        }
+
+        // Supply Chain Intercept and Rogue Mode strokes
+        if (supplyChainActiveIdRef.current === id) {
+          return '#fbbf24'; // Glowing yellow stroke for active routing head
+        }
+        if (supplyChainStartIdRef.current === id) {
+          return '#4ade80';
+        }
+        if (supplyChainEndIdRef.current === id) {
+          return '#60a5fa';
+        }
+        if (supplyChainPathIdsRef.current && supplyChainPathIdsRef.current.has(id)) {
+          return '#34d399';
+        }
+        if (supplyChainDecayIdsRef.current && supplyChainDecayIdsRef.current.has(id)) {
+          return '#b91c1c';
+        }
+        if (supplyChainChokeIdsRef.current && supplyChainChokeIdsRef.current.has(id)) {
+          return '#facc15';
+        }
+        if (infectedIdsRef.current && infectedIdsRef.current.has(id)) {
+          return '#fca5a5';
+        }
+        if (shieldedIdsRef.current && shieldedIdsRef.current.has(id)) {
+          return '#22d3ee'; // Cyan bright neon boundary for walls
         }
 
         if (plotContinentsColorModeRef.current) {
@@ -724,7 +841,11 @@ export function WorldMap({
 
   useEffect(() => {
     if (mapLoaded) updateMapColors();
-  }, [mapLoaded, guessedIds, highlightedId, isFinished, focusedContinent, projectionType, isMemoryMode, isPaused, highlightedAllianceMemberIds]);
+  }, [
+    mapLoaded, guessedIds, highlightedId, isFinished, focusedContinent, projectionType, 
+    isMemoryMode, isPaused, highlightedAllianceMemberIds, 
+    infectedIds, shieldedIds, supplyChainStartId, supplyChainEndId, supplyChainPathIds, supplyChainDecayIds, supplyChainChokeIds
+  ]);
 
   useEffect(() => {
     if (!highlightedId || isFinished || !gRef.current) return;

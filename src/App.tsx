@@ -46,9 +46,13 @@ import {
   Zap,
   Cpu,
   Users,
-  Terminal
+  Shield,
+  Terminal,
+  Gauge,
+  Activity
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
+import { getCountryNeighbors, getSupplyChainNeighbors, findSupplyChainPath } from './data/borders';
 import { WorldMap } from './components/WorldMap';
 import { CountryData } from './types';
 import { cn } from './lib/utils';
@@ -312,6 +316,322 @@ export default function App() {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [gameMode, setGameMode] = useState<'zen' | 'challenge'>('zen');
   const [gameType, setGameType] = useState<'typing' | 'flag' | 'highlight'>('typing');
+  const [typerMode, setTyperMode] = useState<'default' | 'rogue' | 'supply_chain'>('default');
+  const [isPaused, setIsPaused] = useState(false);
+  
+  // Rogue model state
+  const [infectedIds, setInfectedIds] = useState<Set<string>>(new Set());
+  const [shieldedIds, setShieldedIds] = useState<Set<string>>(new Set());
+  const [rogueEmpCharge, setRogueEmpCharge] = useState<number>(0);
+  const [isRogueShaking, setIsRogueShaking] = useState<boolean>(false);
+  const [rogueLogs, setRogueLogs] = useState<{ id: string; text: string; type: 'warn' | 'success' | 'info' }[]>([]);
+  
+  // Supply Chain state
+  const [supplyChainStartId, setSupplyChainStartId] = useState<string | null>(null);
+  const [supplyChainEndId, setSupplyChainEndId] = useState<string | null>(null);
+  const [supplyChainActiveId, setSupplyChainActiveId] = useState<string | null>(null);
+  const [supplyChainPathIds, setSupplyChainPathIds] = useState<Set<string>>(new Set());
+  const [supplyChainPathList, setSupplyChainPathList] = useState<string[]>([]);
+  const [supplyChainDecayIds, setSupplyChainDecayIds] = useState<Set<string>>(new Set());
+  const [supplyChainChokeIds, setSupplyChainChokeIds] = useState<Set<string>>(new Set());
+  const [supplyChainCrisisMessage, setSupplyChainCrisisMessage] = useState<string | null>(null);
+  const [supplyDifficulty, setSupplyDifficulty] = useState<number>(3); // Levels: 1 (Easy), 2 (Normal), 3 (Hard), 4 (Expert), 5 (Insane)
+  const [supplyOverrideCharges, setSupplyOverrideCharges] = useState<number>(1); // Active ability: Clears decay/chokes
+  const [supplyConsecutiveLinks, setSupplyConsecutiveLinks] = useState<number>(0); // Earning override charge combo tracker
+  const [supplyRadarScans, setSupplyRadarScans] = useState<number>(2); // Waypoint identifier tools
+  const [supplyDisruptors, setSupplyDisruptors] = useState<number>(1); // Airlock release grid disruption tools
+  const [selectedSupplyPreset, setSelectedSupplyPreset] = useState<string>('random_dynamic');
+
+  // Synchronous tracker for supply chain state to prevent race-conditions/state-batching errors
+  const supplyChainRef = useRef<{
+    startId: string | null;
+    endId: string | null;
+    activeId: string | null;
+    pathIds: Set<string>;
+    pathList: string[];
+    decayIds: Set<string>;
+    chokeIds: Set<string>;
+  }>({
+    startId: null,
+    endId: null,
+    activeId: null,
+    pathIds: new Set(),
+    pathList: [],
+    decayIds: new Set(),
+    chokeIds: new Set()
+  });
+
+  const lastGuessTimeRef = useRef<number>(0);
+
+  const SUPPLY_DIFFICULTY_CONFIGS: Record<number, {
+    level: number;
+    name: string;
+    badge: string;
+    decayInterval: number;
+    crisisInterval: number;
+    description: string;
+    scoreMultiplier: number;
+    maxChokes: number;
+    color: string;
+  }> = {
+    1: {
+      level: 1,
+      name: "Safe Passage",
+      badge: "EASY",
+      decayInterval: 12000,
+      crisisInterval: 25000,
+      description: "Relaxed pace with very slow decay. Airspace blockades are disabled.",
+      scoreMultiplier: 0.7,
+      maxChokes: 0,
+      color: "from-emerald-500 to-green-600 text-emerald-400"
+    },
+    2: {
+      level: 2,
+      name: "Strategic Passage",
+      badge: "NORMAL",
+      decayInterval: 8500,
+      crisisInterval: 18000,
+      description: "Standard flow with moderate decay rate and basic airspace turbulence.",
+      scoreMultiplier: 1.0,
+      maxChokes: 1,
+      color: "from-cyan-500 to-blue-600 text-cyan-400"
+    },
+    3: {
+      level: 3,
+      name: "Danger Zone",
+      badge: "HARD",
+      decayInterval: 6000,
+      crisisInterval: 12000,
+      description: "Fast-moving decay and frequent air embargo blockades requiring detours.",
+      scoreMultiplier: 1.5,
+      maxChokes: 2,
+      color: "from-amber-500 to-orange-600 text-amber-400"
+    },
+    4: {
+      level: 4,
+      name: "Sovereign Embargo",
+      badge: "EXPERT",
+      decayInterval: 4000,
+      crisisInterval: 8000,
+      description: "Extreme decay speeds. Blockades trigger rapidly, threatening complete chain collapse.",
+      scoreMultiplier: 2.2,
+      maxChokes: 3,
+      color: "from-rose-500 to-pink-600 text-rose-400"
+    },
+    5: {
+      level: 5,
+      name: "Black Swan Shock",
+      badge: "INSANE",
+      decayInterval: 2200,
+      crisisInterval: 4500,
+      description: "Near-instant decay and chaotic multi-blockades. Pure, frantic geographic reflexes.",
+      scoreMultiplier: 3.5,
+      maxChokes: 4,
+      color: "from-purple-600 to-red-600 text-purple-400"
+    }
+  };
+
+  const ensureNeighborsAreOperational = (currentActiveId: string | null, activeChokeId: string | null) => {
+    if (!currentActiveId) return;
+    
+    // Get all neighboring countries
+    const neighbors = getSupplyChainNeighbors(currentActiveId);
+    
+    const { decayIds, chokeIds } = supplyChainRef.current;
+    
+    // Create copies of the state
+    const nextDecay = new Set(decayIds);
+    const nextChoke = new Set(chokeIds);
+    
+    let decayChanged = false;
+    let chokeChanged = false;
+    
+    // Clear all neighbors of currentActiveId (except activeChokeId) from choke points and decay points
+    for (const neighbor of neighbors) {
+      if (neighbor === activeChokeId) {
+        if (!nextChoke.has(neighbor)) {
+          nextChoke.add(neighbor);
+          chokeChanged = true;
+        }
+      } else {
+        if (nextChoke.has(neighbor)) {
+          nextChoke.delete(neighbor);
+          chokeChanged = true;
+        }
+      }
+      
+      // Ensure other neighbors are not in decayIds so they remain operational
+      if (nextDecay.has(neighbor)) {
+        nextDecay.delete(neighbor);
+        decayChanged = true;
+      }
+    }
+    
+    // Make sure the activeChokeId is the ONLY chokeId in the whole game to prevent stale blockades
+    if (activeChokeId) {
+      if (nextChoke.size !== 1 || !nextChoke.has(activeChokeId)) {
+        nextChoke.clear();
+        nextChoke.add(activeChokeId);
+        chokeChanged = true;
+      }
+    } else {
+      if (nextChoke.size > 0) {
+        nextChoke.clear();
+        chokeChanged = true;
+      }
+    }
+    
+    if (decayChanged) {
+      supplyChainRef.current.decayIds = nextDecay;
+      setSupplyChainDecayIds(nextDecay);
+    }
+    if (chokeChanged) {
+      supplyChainRef.current.chokeIds = nextChoke;
+      setSupplyChainChokeIds(nextChoke);
+    }
+  };
+
+  const syncSupplyChainStart = (id: string | null) => {
+    supplyChainRef.current.startId = id;
+    setSupplyChainStartId(id);
+  };
+  const syncSupplyChainEnd = (id: string | null) => {
+    supplyChainRef.current.endId = id;
+    setSupplyChainEndId(id);
+  };
+  const syncSupplyChainActive = (id: string | null) => {
+    supplyChainRef.current.activeId = id;
+    setSupplyChainActiveId(id);
+    if (id) {
+      // Find what choke point represents the current active blockade (if any)
+      const currentChokes = Array.from(supplyChainRef.current.chokeIds) as string[];
+      const neighbors = getSupplyChainNeighbors(id);
+      const activeChokeId = (currentChokes.find(cId => neighbors.includes(cId)) as string) || null;
+      ensureNeighborsAreOperational(id, activeChokeId);
+    }
+  };
+  const syncSupplyChainPathIds = (ids: Set<string>) => {
+    supplyChainRef.current.pathIds = ids;
+    setSupplyChainPathIds(ids);
+  };
+  const syncSupplyChainPathList = (list: string[]) => {
+    supplyChainRef.current.pathList = list;
+    setSupplyChainPathList(list);
+  };
+  const syncSupplyChainDecayIds = (ids: Set<string>) => {
+    supplyChainRef.current.decayIds = ids;
+    setSupplyChainDecayIds(ids);
+  };
+  const syncSupplyChainChokeIds = (ids: Set<string>) => {
+    supplyChainRef.current.chokeIds = ids;
+    setSupplyChainChokeIds(ids);
+  };
+
+  const getDynamicSupplyChainPreset = (): { start: string; end: string; label: string } => {
+    // Isolated island and micro-island countries to exclude to avoid fragmented transoceanic supply chain paths
+    const EXCLUDED_ISLAND_IDS = new Set<string>([
+      // Caribbean Island Nations
+      "028", // Antigua and Barbuda
+      "044", // Bahamas
+      "052", // Barbados
+      "192", // Cuba
+      "212", // Dominica
+      "214", // Dominican Republic
+      "308", // Grenada
+      "332", // Haiti
+      "388", // Jamaica
+      "659", // Saint Kitts and Nevis
+      "662", // Saint Lucia
+      "670", // Saint Vincent and the Grenadines
+      "780", // Trinidad and Tobago
+
+      // Oceanic Small Islands (Keeping Australia "036", New Zealand "554", Papua New Guinea "598")
+      "242", // Fiji
+      "296", // Kiribati
+      "584", // Marshall Islands
+      "583", // Micronesia
+      "520", // Nauru
+      "585", // Palau
+      "882", // Samoa
+      "090", // Solomon Islands
+      "776", // Tonga
+      "798", // Tuvalu
+      "548", // Vanuatu
+
+      // Minor isolated island nations from other regions
+      "132", // Cabo Verde
+      "462", // Maldives
+      "480", // Mauritius
+      "690", // Seychelles
+    ]);
+
+    const eligible = COUNTRIES.filter(c => 
+      getSupplyChainNeighbors(c.id).length > 0 && 
+      !EXCLUDED_ISLAND_IDS.has(c.id)
+    );
+    
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const startCountry = eligible[Math.floor(Math.random() * eligible.length)];
+      const endCountry = eligible[Math.floor(Math.random() * eligible.length)];
+      
+      if (startCountry.id === endCountry.id) continue;
+      
+      // Compute actual path using existing findSupplyChainPath helper
+      const path = findSupplyChainPath(startCountry.id, endCountry.id);
+      // We want a sweet spot of complexity: 4 to 12 sectors
+      if (path && path.length >= 4 && path.length <= 11) {
+        return {
+          start: startCountry.id,
+          end: endCountry.id,
+          label: `${startCountry.name} to ${endCountry.name} (${startCountry.continent} ➔ ${endCountry.continent} Corridor)`
+        };
+      }
+    }
+    
+    // Fallback if 200 attempts don't yield (highly unlikely)
+    return { start: "724", end: "356", label: "Spain to India (Euro-Asian Corridor)" };
+  };
+
+  const loadSupplyChainPreset = (presetKey: string) => {
+    let preset: { start: string; end: string; label: string };
+    
+    if (presetKey === 'random_dynamic') {
+      preset = getDynamicSupplyChainPreset();
+    } else {
+      const presetsMap: Record<string, { start: string; end: string; label: string }> = {
+        'sp_in': { start: "724", end: "356", label: "Spain to India (Euro-Asian Corridor)" },
+        'fr_za': { start: "250", end: "710", label: "France to South Africa (Trans-African Backbone)" },
+        'us_br': { start: "840", end: "076", label: "United States to Brazil (Pan-American Highway)" },
+        'eg_ru': { start: "818", end: "643", label: "Egypt to Russia (Suez-Siberian Corridor)" },
+        'de_jp': { start: "276", end: "392", label: "Germany to Japan (Eurasian Silk Network)" },
+        'us_fr': { start: "840", end: "250", label: "United States to France (North-Atlantic Transoceanic)" },
+      };
+      preset = presetsMap[presetKey] || presetsMap['sp_in'];
+    }
+
+    supplyChainRef.current = {
+      startId: preset.start,
+      endId: preset.end,
+      activeId: preset.start,
+      pathIds: new Set([preset.start]),
+      pathList: [preset.start],
+      decayIds: new Set(),
+      chokeIds: new Set()
+    };
+
+    syncSupplyChainStart(preset.start);
+    syncSupplyChainEnd(preset.end);
+    syncSupplyChainActive(preset.start);
+    syncSupplyChainPathIds(new Set([preset.start]));
+    syncSupplyChainPathList([preset.start]);
+    syncSupplyChainDecayIds(new Set());
+    syncSupplyChainChokeIds(new Set());
+    setSupplyChainCrisisMessage(`GRID LINK COMMENCED: Connect ${preset.label}`);
+    setSupplyOverrideCharges(1);
+    setSupplyConsecutiveLinks(0);
+    setSupplyRadarScans(2);
+    setSupplyDisruptors(1);
+  };
   const [highlightQueue, setHighlightQueue] = useState<string[]>([]);
   const [originalHighlightQueue, setOriginalHighlightQueue] = useState<string[]>([]);
   const [currentTargetHighlightId, setCurrentTargetHighlightId] = useState<string | null>(null);
@@ -360,6 +680,45 @@ export default function App() {
     const shuffled = options.sort(() => Math.random() - 0.5);
     setMultipleChoiceOptions(shuffled);
   }, [currentTargetFlagId, currentTargetHighlightId, gameType]);
+
+  // Dynamic BFS calculation for the pathfinding HUD guidance
+  const supplyChainBFSData = useMemo(() => {
+    if (gameType === 'typing' && typerMode === 'supply_chain' && supplyChainActiveId && supplyChainEndId) {
+      // Find shortest path from the active node to the end node avoiding decayed/choked sectors
+      const avoidList = new Set([...supplyChainDecayIds, ...supplyChainChokeIds]);
+      const path = findSupplyChainPath(supplyChainActiveId, supplyChainEndId, avoidList);
+      
+      if (path) {
+        const nextHopId = path[1]; // First node in route after activeId
+        const nextHopName = COUNTRIES.find(c => c.id === nextHopId)?.name || 'Unknown Hub';
+        return {
+          solvable: true,
+          distance: path.length - 1, // Number of sectors to jump
+          nextHop: nextHopName
+        };
+      } else {
+        // Unsolvable under current constraints! Check if solvable if we ignore choke points but keeping decay
+        const pathNoChokes = findSupplyChainPath(supplyChainActiveId, supplyChainEndId, supplyChainDecayIds);
+        if (pathNoChokes) {
+          const nextHopId = pathNoChokes[1];
+          const nextHopName = COUNTRIES.find(c => c.id === nextHopId)?.name || 'Unknown Hub';
+          return {
+            solvable: false,
+            hasDetour: true,
+            distance: pathNoChokes.length - 1,
+            nextHop: `${nextHopName} (Blocked!)`
+          };
+        }
+        return {
+          solvable: false,
+          hasDetour: false,
+          distance: -1,
+          nextHop: 'CONNECTION SEVERED'
+        };
+      }
+    }
+    return null;
+  }, [supplyChainActiveId, supplyChainEndId, supplyChainDecayIds, supplyChainChokeIds, gameType, typerMode]);
 
   const sanitizeHintText = (text: string, country: any): string => {
     if (!text || !country) return "";
@@ -420,6 +779,198 @@ export default function App() {
   }, [selectedAllianceName, allianceFlagRefreshKey]);
 
   useEffect(() => {
+    if (typerMode === 'supply_chain' && !hasStarted) {
+      loadSupplyChainPreset(selectedSupplyPreset);
+    }
+  }, [typerMode, selectedSupplyPreset, hasStarted]);
+
+  // Sub-game-modes Loop (Rogue spread & Supply Chain decay/crises)
+  useEffect(() => {
+    if (!hasStarted || isPaused || isFinished) return;
+
+    let rogueTimer: NodeJS.Timeout | null = null;
+    let empChargeTimer: NodeJS.Timeout | null = null;
+    let supplyDecayTimer: NodeJS.Timeout | null = null;
+    let supplyCrisisTimer: NodeJS.Timeout | null = null;
+
+    if (gameType === 'typing' && typerMode === 'rogue') {
+      const rogueIntervals: Record<number, number> = {
+        1: 5500,
+        2: 4500,
+        3: 3500,
+        4: 2500,
+        5: 1500
+      };
+      const activeInterval = rogueIntervals[supplyDifficulty] || 3500;
+
+      // Periodic infection spread in Rogue State mode
+      rogueTimer = setInterval(() => {
+        setInfectedIds(prev => {
+          if (prev.size === 0) {
+            const activeCountries = COUNTRIES.map(c => c.id);
+            const randomId = activeCountries[Math.floor(Math.random() * activeCountries.length)];
+            return new Set([randomId]);
+          }
+
+          // Whack-A-Mole collapse check
+          if (prev.size >= 120) {
+            clearInterval(rogueTimer!);
+            setFeedback({ text: "🚨 Rogue Overload: GRID SECURITY COLLAPSED!", type: 'error' });
+            setTimeout(() => setFeedback(null), 3000);
+            finishGame();
+            return prev;
+          }
+
+          const next = new Set(prev);
+          // Spread to neighbors (45% chance for each infected), but respect defensive firewalls (shieldedIds)
+          prev.forEach(id => {
+            if (Math.random() < 0.45) {
+              const neighbors = getCountryNeighbors(id);
+              const uninfectedNeighbors = neighbors.filter(nid => !next.has(nid) && !shieldedIdsRef.current.has(nid));
+              if (uninfectedNeighbors.length > 0) {
+                const randomNeighbor = uninfectedNeighbors[Math.floor(Math.random() * uninfectedNeighbors.length)];
+                next.add(randomNeighbor);
+              }
+            }
+          });
+
+          // Spontaneous outbreak (30% chance), bypassing firewalled sectors
+          if (Math.random() < 0.3 && next.size < 20) {
+            const activeCountries = COUNTRIES.map(c => c.id);
+            const uninfectedCountries = activeCountries.filter(id => !next.has(id) && !shieldedIdsRef.current.has(id));
+            if (uninfectedCountries.length > 0) {
+              const randomId = uninfectedCountries[Math.floor(Math.random() * uninfectedCountries.length)];
+              next.add(randomId);
+            }
+          }
+
+          return next;
+        });
+      }, activeInterval);
+
+      // Charge EMP naturally
+      empChargeTimer = setInterval(() => {
+        setRogueEmpCharge(prev => Math.min(100, prev + 2));
+      }, 1000);
+    }
+
+    if (gameType === 'typing' && typerMode === 'supply_chain') {
+      const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+
+      // 1. Data Decay wave: consumes path link-by-link
+      supplyDecayTimer = setInterval(() => {
+        const { pathList, startId, pathIds, decayIds, activeId } = supplyChainRef.current;
+        if (pathList.length === 0) return;
+
+        const decayedId = pathList[0];
+        const nextList = pathList.slice(1);
+
+        const nextPathIds = new Set<string>(pathIds);
+        nextPathIds.delete(decayedId);
+
+        const nextDecay = new Set<string>(decayIds);
+        nextDecay.add(decayedId);
+
+        const matchedName = COUNTRIES.find(c => c.id === decayedId)?.name || "Sector";
+        setSupplyChainCrisisMessage(`⚠️ DATA DECAY OUTBREAK: ${matchedName.toUpperCase()} has collapsed!`);
+
+        syncSupplyChainPathIds(nextPathIds);
+        syncSupplyChainDecayIds(nextDecay);
+        syncSupplyChainPathList(nextList);
+
+        // 1. Check first if decay caught up to active worker position and update active node
+        let finalActive = activeId;
+        if (activeId === decayedId) {
+          if (nextList.length > 0) {
+            finalActive = nextList[nextList.length - 1];
+            syncSupplyChainActive(finalActive);
+          } else {
+            // Total chain sever! Reset the active gate back to the initial start country (startId) which is always entered
+            finalActive = startId || "";
+            syncSupplyChainActive(finalActive);
+            setFeedback({ text: `⚠️ TOTAL PATH SEVERED: ACTIVE GATE RECONNECTING TO START HUB`, type: 'info' });
+            setTimeout(() => setFeedback(null), 3000);
+          }
+        }
+
+        // 2. Keep the final active node's neighbors operational (never decayed)
+        const currentChokes = Array.from(supplyChainRef.current.chokeIds) as string[];
+        const activeNeighbors = finalActive ? getSupplyChainNeighbors(finalActive) : [];
+        const activeChokeId = (currentChokes.find(cId => activeNeighbors.includes(cId)) as string) || null;
+        ensureNeighborsAreOperational(finalActive, activeChokeId);
+      }, config.decayInterval);
+
+      // 2. Trans-airspace blockades and choke points
+      if (config.maxChokes > 0) {
+        supplyCrisisTimer = setInterval(() => {
+          const { activeId, endId, pathIds, decayIds } = supplyChainRef.current;
+          if (!activeId) return;
+
+          const neighbors = getSupplyChainNeighbors(activeId);
+          const targetBlockades = neighbors.filter(nid => 
+            nid !== endId && 
+            !pathIds.has(nid) && 
+            !decayIds.has(nid)
+          );
+
+          if (targetBlockades.length > 0) {
+            const shuffledBlockades = [...targetBlockades].sort(() => Math.random() - 0.5);
+            const selectedBlockades = shuffledBlockades.slice(0, Math.min(config.maxChokes, shuffledBlockades.length));
+            
+            const nextChokes = new Set<string>();
+            selectedBlockades.forEach(bid => nextChokes.add(bid));
+            syncSupplyChainChokeIds(nextChokes);
+
+            const blockNames = selectedBlockades.map(bid => COUNTRIES.find(c => c.id === bid)?.name || "Airspace").join(", ");
+            setSupplyChainCrisisMessage(`🚨 AIRSPACE BLOCKED: [${blockNames.toUpperCase()}] under blockade! Find detour!`);
+
+            ensureNeighborsAreOperational(activeId, selectedBlockades[0]);
+
+            // Clear choke point after 10s to simulate changing weather/crisis dynamics
+            setTimeout(() => {
+              const currentActive = supplyChainRef.current.activeId;
+              syncSupplyChainChokeIds(new Set());
+              ensureNeighborsAreOperational(currentActive, null);
+            }, 10000);
+          }
+        }, config.crisisInterval);
+      }
+    }
+
+    return () => {
+      if (rogueTimer) clearInterval(rogueTimer);
+      if (empChargeTimer) clearInterval(empChargeTimer);
+      if (supplyDecayTimer) clearInterval(supplyDecayTimer);
+      if (supplyCrisisTimer) clearInterval(supplyCrisisTimer);
+    };
+  }, [hasStarted, isPaused, isFinished, gameType, typerMode, supplyDifficulty]);
+
+  const prevInfectedIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (gameType === 'typing' && typerMode === 'rogue' && hasStarted && !isPaused && !isFinished) {
+      const added = Array.from(infectedIds).filter(id => !prevInfectedIdsRef.current.has(id));
+      if (added.length > 0) {
+        // Alarm beep sound
+        playSynthSound('alarm');
+        
+        // Shake screen
+        setIsRogueShaking(true);
+        const t = setTimeout(() => setIsRogueShaking(false), 250);
+        
+        // Log outbreaks
+        added.forEach(id => {
+          const name = COUNTRIES.find(c => c.id === id)?.name || id;
+          addRogueLog(`⚠️ OUTBREAK: Sector ${name} infected!`, 'warn');
+        });
+        
+        return () => clearTimeout(t);
+      }
+    }
+    prevInfectedIdsRef.current = infectedIds;
+  }, [infectedIds, gameType, typerMode, hasStarted, isPaused, isFinished]);
+
+  useEffect(() => {
     if (!showExpandedDetail) return;
     
     const handleSurveyKeyDown = (e: KeyboardEvent) => {
@@ -476,10 +1027,14 @@ export default function App() {
   const [isMemoryMode, setIsMemoryMode] = useState(false);
   const [expansionSort, setExpansionSort] = useState<'alphabet' | 'wealth'>('alphabet');
   const [allianceSort, setAllianceSort] = useState<'alphabet' | 'size'>('size');
-  const [isPaused, setIsPaused] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const shieldedIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    shieldedIdsRef.current = shieldedIds;
+  }, [shieldedIds]);
   const typeSoundPool = useRef<HTMLAudioElement[]>([]);
   const returnSoundRef = useRef<HTMLAudioElement | null>(null);
 
@@ -610,6 +1165,116 @@ export default function App() {
     returnSoundRef.current.volume = 0.15;
   }, []);
 
+  const playSynthSound = (type: 'success' | 'error' | 'alarm' | 'shield' | 'purge') => {
+    if (!isSoundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const now = ctx.currentTime;
+
+      if (type === 'success') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(783.99, now + 0.08);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'error') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.linearRampToValueAtTime(70, now + 0.15);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.start(now);
+        osc.stop(now + 0.18);
+      } else if (type === 'alarm') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else if (type === 'shield') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(250, now);
+        osc.frequency.exponentialRampToValueAtTime(1100, now + 0.3);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else if (type === 'purge') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.linearRampToValueAtTime(80, now + 0.8);
+        
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(90, now);
+        osc2.frequency.linearRampToValueAtTime(40, now + 0.8);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        gain2.gain.setValueAtTime(0.18, now);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.82);
+        
+        osc.start(now);
+        osc.stop(now + 0.8);
+        osc2.start(now);
+        osc2.stop(now + 0.82);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const addRogueLog = (text: string, type: 'warn' | 'success' | 'info') => {
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0];
+    setRogueLogs(prev => [
+      { id: Math.random().toString(), text: `[${timeStr}] ${text}`, type },
+      ...prev.slice(0, 15)
+    ]);
+  };
+
+  const triggerRogueEmp = () => {
+    setRogueEmpCharge(0);
+    playSynthSound('purge');
+    
+    // Shake screen
+    setIsRogueShaking(true);
+    setTimeout(() => setIsRogueShaking(false), 500);
+
+    // Clear up to 40% of infected IDs
+    setInfectedIds(prev => {
+      const list = Array.from(prev);
+      const amountToClear = Math.ceil(list.length * 0.4);
+      if (amountToClear <= 0) return prev;
+      
+      const shuffled = [...list].sort(() => Math.random() - 0.5);
+      const removed = shuffled.slice(0, amountToClear);
+      const next = new Set(prev);
+      removed.forEach(id => next.delete(id));
+      
+      const removedNames = removed.map(id => COUNTRIES.find(c => c.id === id)?.name || id).join(', ');
+      addRogueLog(`⚡ EMP BLAST: Quarantined: ${removedNames}`, 'success');
+      
+      return next;
+    });
+    
+    setFeedback({ text: "⚡ GRID VOLTAGE SPIKE: EMP BLAST DEPLOYED!", type: 'success' });
+    setTimeout(() => setFeedback(null), 3000);
+  };
+
   const playTypeSound = () => {
     if (!isSoundEnabled) return;
     const audio = typeSoundPool.current.find(a => a.paused || a.ended) || typeSoundPool.current[Math.floor(Math.random() * typeSoundPool.current.length)];
@@ -692,7 +1357,7 @@ export default function App() {
   useEffect(() => {
     if (hasStarted && startTime && !isFinished && !isPaused) {
       timerRef.current = setInterval(() => {
-        const isTimed = gameType === 'flag' ? flagGameMode === 'timed' : gameMode === 'challenge';
+        const isTimed = (gameType === 'typing' && typerMode === 'supply_chain') || (gameType === 'flag' ? flagGameMode === 'timed' : gameMode === 'challenge');
         if (!isTimed) {
           setTimeElapsed(prev => prev + 1);
         } else {
@@ -789,6 +1454,124 @@ export default function App() {
 
   const difficultyMultiplier = isMemoryMode ? 1.5 : 1.0;
 
+  const triggerSupplyOverride = () => {
+    if (supplyOverrideCharges <= 0) {
+      playSynthSound('error');
+      setFeedback({ text: "⚡ ERROR: NO EMP OVERRIDE CHARGES AVAILABLE!", type: 'error' });
+      setTimeout(() => setFeedback(null), 2500);
+      return;
+    }
+
+    const { activeId, chokeIds, decayIds } = supplyChainRef.current;
+    let activated = false;
+
+    if (chokeIds.size > 0) {
+      const nextChokes = new Set<string>(chokeIds as Set<string>);
+      const clearedId = Array.from(chokeIds)[0] as string;
+      nextChokes.delete(clearedId);
+      syncSupplyChainChokeIds(nextChokes);
+      
+      ensureNeighborsAreOperational(activeId, nextChokes.size > 0 ? (Array.from(nextChokes)[0] as string) : null);
+      activated = true;
+      setSupplyChainCrisisMessage(`⚡ OVERRIDE ENGAGED: Blockade in ${COUNTRIES.find(c => c.id === clearedId)?.name || 'Sector'} has been neutralised!`);
+      playSynthSound('purge');
+    } else if (decayIds.size > 0) {
+      const nextDecay = new Set<string>(decayIds as Set<string>);
+      const decayList = Array.from(decayIds) as string[];
+      const restoredId = decayList[decayList.length - 1];
+      nextDecay.delete(restoredId);
+      syncSupplyChainDecayIds(nextDecay);
+
+      activated = true;
+      setSupplyChainCrisisMessage(`⚡ OVERRIDE ENGAGED: Sector ${COUNTRIES.find(c => c.id === restoredId)?.name || 'Sector'} has been re-polarised!`);
+      playSynthSound('purge');
+    }
+
+    if (activated) {
+      setSupplyOverrideCharges(prev => Math.max(0, prev - 1));
+      setFeedback({ text: `⚡ OVERRIDE DEPLOYED SUCCESSFULLY!`, type: 'success' });
+      setTimeout(() => setFeedback(null), 2000);
+    } else {
+      playSynthSound('error');
+      setFeedback({ text: `⚡ BYPASS ABORTED: ALL SECTORS ARE CURRENTLY STABLE`, type: 'info' });
+      setTimeout(() => setFeedback(null), 2000);
+    }
+  };
+
+  const triggerRadarScan = () => {
+    if (supplyRadarScans <= 0) {
+      playSynthSound('error');
+      setFeedback({ text: `📡 SCAN RADAR FAILURE: NO SCANS REMAINING`, type: 'error' });
+      setTimeout(() => setFeedback(null), 2000);
+      return;
+    }
+    const { activeId, endId, pathIds, decayIds, chokeIds } = supplyChainRef.current;
+    if (!activeId) return;
+
+    const neighbors = getSupplyChainNeighbors(activeId);
+    const validNextOptions = neighbors.filter(nid => 
+      !pathIds.has(nid) && 
+      !decayIds.has(nid) && 
+      !chokeIds.has(nid)
+    );
+
+    if (validNextOptions.length === 0) {
+      playSynthSound('error');
+      setFeedback({ text: `📡 SCAN RADAR FAILURE: NO SAFE DIRECT PATH FOUND`, type: 'error' });
+      setTimeout(() => setFeedback(null), 2500);
+      return;
+    }
+
+    // Best Option pathfinding helper (BFS) closest to end
+    let bestOption = validNextOptions[0];
+    let minDistance = Infinity;
+
+    validNextOptions.forEach(nid => {
+      const path = findSupplyChainPath(nid, endId, new Set([...decayIds, ...chokeIds]));
+      if (path && path.length < minDistance) {
+        minDistance = path.length;
+        bestOption = nid;
+      }
+    });
+
+    const targetCountry = COUNTRIES.find(c => c.id === bestOption);
+    if (targetCountry) {
+      setSupplyRadarScans(prev => Math.max(0, prev - 1));
+      playSynthSound('shield');
+      setFeedback({ text: `📡 RADAR DETECTED OPTIMAL SEC-PATH: TRY "${targetCountry.name.toUpperCase()}"`, type: 'info' });
+      
+      // Instantly light up on map path target
+      setLastGuessedId(targetCountry.id);
+      setTimeout(() => {
+        setFeedback(null);
+      }, 5000);
+    }
+  };
+
+  const triggerChokeDisruptor = () => {
+    if (supplyDisruptors <= 0) {
+      playSynthSound('error');
+      setFeedback({ text: `⚡ DISRUPTOR FAILURE: COMPONENT DEPLEATED`, type: 'error' });
+      setTimeout(() => setFeedback(null), 2000);
+      return;
+    }
+
+    const { activeId, chokeIds } = supplyChainRef.current;
+    if (chokeIds.size === 0) {
+      playSynthSound('error');
+      setFeedback({ text: `⚡ DISRUPTOR ABORTED: NO BLOCKADES ACTIVE`, type: 'info' });
+      setTimeout(() => setFeedback(null), 2000);
+      return;
+    }
+
+    setSupplyDisruptors(prev => Math.max(0, prev - 1));
+    syncSupplyChainChokeIds(new Set());
+    ensureNeighborsAreOperational(activeId, null);
+    playSynthSound('purge');
+    setFeedback({ text: `⚡ DISRUPTOR ENGAGED: ALL ACTIVE CHOKE BLOCKADES DISSOLVED!`, type: 'success' });
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value !== inputValue) {
@@ -814,6 +1597,8 @@ export default function App() {
           setIsGuest(true);
         }
         startGame();
+        setInputValue('');
+        return;
       }
 
       if (normalized === 'india') {
@@ -841,7 +1626,8 @@ export default function App() {
             setMostRecentGuessedId(target.id);
             
             const basePoints = getCountryPoints(target);
-            const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+            const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+            const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * config.scoreMultiplier * 1.5); 
             setScore(prev => prev + points);
             
             setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
@@ -890,7 +1676,8 @@ export default function App() {
             setMostRecentGuessedId(target.id);
             
             const basePoints = getCountryPoints(target);
-            const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+            const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+            const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * config.scoreMultiplier * 1.5); 
             setScore(prev => prev + points);
             
             setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
@@ -921,6 +1708,259 @@ export default function App() {
         } else {
            setFeedback({ text: `INCORRECT GUESS`, type: 'error' });
            setTimeout(() => setFeedback(null), 1000);
+        }
+        return;
+      }
+
+      // Rogue State Containment Mode Input Handling
+      if (gameType === 'typing' && typerMode === 'rogue') {
+        const normalized = inputValue.trim().toLowerCase();
+        
+        // EMP Purge command
+        if (normalized === 'purge' || normalized === 'emp') {
+          if (rogueEmpCharge >= 100) {
+            triggerRogueEmp();
+          } else {
+            playSynthSound('error');
+            setFeedback({ text: `⚡ EMP BLAST CHARGING (${rogueEmpCharge}%)`, type: 'error' });
+            setTimeout(() => setFeedback(null), 1500);
+          }
+          setInputValue('');
+          return;
+        }
+
+        const matched = COUNTRIES.find(c => {
+          const names = [c.name.toLowerCase(), ...c.aliases.map(a => a.toLowerCase())];
+          return names.includes(normalized);
+        });
+
+        if (matched) {
+          if (infectedIds.has(matched.id)) {
+            const newInfected = new Set(infectedIds);
+            newInfected.delete(matched.id);
+            setInfectedIds(newInfected);
+
+            const newGuessed = new Set(guessedIds);
+            newGuessed.add(matched.id);
+            setGuessedIds(newGuessed);
+            setLastGuessedId(matched.id);
+            setMostRecentGuessedId(matched.id);
+            setInputValue('');
+
+            // Fast containment bonus & rewards
+            const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+            const points = Math.floor(350 * config.scoreMultiplier);
+            setScore(p => p + points);
+            playSynthSound('success');
+            addRogueLog(`✓ Contained active infection in ${matched.name}`, 'success');
+            
+            // Increment EMP charge on containment
+            setRogueEmpCharge(prev => Math.min(100, prev + 12));
+
+            setFeedback({ text: `CONTAINED ACTIVE ROGUE INFECTION: ${matched.name.toUpperCase()}`, type: 'success' });
+            setTimeout(() => setFeedback(null), 2000);
+
+            // Play correct alert flag sound if available of course
+            if (matched.code) {
+              setActiveFlag(matched.code);
+              setTimeout(() => setActiveFlag(null), 1500);
+            }
+
+            // Reprieve outbreak if they cleared everything
+            if (newInfected.size === 0) {
+              const activeCountries = COUNTRIES.map(c => c.id);
+              const randomNext = activeCountries[Math.floor(Math.random() * activeCountries.length)];
+              setInfectedIds(new Set([randomNext]));
+              addRogueLog(`⚠ Anomalies found. New outbreak patient zero in ${COUNTRIES.find(c => c.id === randomNext)?.name}`, 'warn');
+              setFeedback({ text: "OUTBREAK CONTAINED. DETECTING SPAWNING SYSTEM ANOMALIES...", type: 'info' });
+              setTimeout(() => setFeedback(null), 3000);
+            }
+          } else if (shieldedIds.has(matched.id)) {
+            // Already shielded
+            playSynthSound('error');
+            setFeedback({ text: `🛡️ SECTOR ${matched.name.toUpperCase()} ALREADY HAS ACTIVE FIREWALL`, type: 'info' });
+            setInputValue('');
+            setTimeout(() => setFeedback(null), 2000);
+          } else {
+            // Safe country, let's see if it qualifies for shielding (borders any infected country)
+            const neighbors = getCountryNeighbors(matched.id);
+            const bordersInfected = neighbors.some(nid => infectedIds.has(nid));
+
+            if (bordersInfected) {
+              // Construct firewall!
+              setShieldedIds(prev => {
+                const next = new Set(prev);
+                next.add(matched.id);
+                return next;
+              });
+              playSynthSound('shield');
+              addRogueLog(`🛡️ Firewall established: ${matched.name}`, 'info');
+              const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+              const points = Math.floor(100 * config.scoreMultiplier);
+              setScore(p => p + points);
+
+              // Remove shield after 15 seconds
+              setTimeout(() => {
+                setShieldedIds(prev => {
+                  const next = new Set(prev);
+                  next.delete(matched.id);
+                  return next;
+                });
+                addRogueLog(`✕ Firewall expired: ${matched.name}`, 'warn');
+              }, 15000);
+
+              setFeedback({ text: `🛡️ FIREWALL ACTIVE ON: ${matched.name.toUpperCase()} (SECURED FOR 15s)`, type: 'success' });
+              setInputValue('');
+              setTimeout(() => setFeedback(null), 2000);
+            } else {
+              // Stable country - doesn't border any infected country
+              playSynthSound('error');
+              setScore(p => Math.max(0, p - 10));
+              setFeedback({ text: `SECTOR ${matched.name.toUpperCase()} STABLE - NO OUTBREAKS (-10 PTS)`, type: 'info' });
+              setInputValue('');
+              setTimeout(() => setFeedback(null), 2000);
+            }
+          }
+        } else if (normalized !== '') {
+          playSynthSound('error');
+          setScore(p => Math.max(0, p - 10));
+          setFeedback({ text: `Sector not found: ${inputValue} (-10 PTS)`, type: 'error' });
+          setTimeout(() => setFeedback(null), 1500);
+        }
+        return;
+      }
+
+      // Supply Chain Intercept Mode Input Handling
+      if (gameType === 'typing' && typerMode === 'supply_chain') {
+        if (normalized === 'override' || normalized === 'bypass' || normalized === 'emp') {
+          triggerSupplyOverride();
+          setInputValue('');
+          return;
+        }
+
+        const matched = COUNTRIES.find(c => {
+          const names = [c.name.toLowerCase(), ...c.aliases.map(a => a.toLowerCase())];
+          return names.includes(normalized);
+        });
+
+        if (matched) {
+          const { activeId, endId, pathIds, decayIds, chokeIds, pathList } = supplyChainRef.current;
+
+          if (decayIds.has(matched.id)) {
+            setFeedback({ text: `SECTOR TERMINATED: DEAD DECAY AREA`, type: 'error' });
+            setInputValue('');
+            setTimeout(() => setFeedback(null), 2000);
+            return;
+          }
+          if (chokeIds.has(matched.id)) {
+            setFeedback({ text: `ALERT: BLOCKADE ACTIVE. ACCESS DENIED`, type: 'error' });
+            setInputValue('');
+            setTimeout(() => setFeedback(null), 2000);
+            return;
+          }
+          if (pathIds.has(matched.id)) {
+            setFeedback({ text: `SECTOR SECURED: ALREADY PART OF CHAIN`, type: 'info' });
+            setInputValue('');
+            setTimeout(() => setFeedback(null), 2000);
+            return;
+          }
+
+          // Check connectivity to active node using synchronous ref activeId
+          const neighbors = activeId ? getSupplyChainNeighbors(activeId) : [];
+          if (neighbors.includes(matched.id)) {
+            // Valid Link!
+            const newPathIds = new Set<string>(pathIds);
+            newPathIds.add(matched.id);
+            const newList = [...pathList, matched.id];
+
+            syncSupplyChainPathIds(newPathIds);
+            syncSupplyChainPathList(newList);
+            syncSupplyChainActive(matched.id);
+
+            const newGuessed = new Set(guessedIds);
+            newGuessed.add(matched.id);
+            setGuessedIds(newGuessed);
+            setLastGuessedId(matched.id);
+            setMostRecentGuessedId(matched.id);
+            setInputValue('');
+
+            // Flag feedback
+            if (matched.code) {
+              setActiveFlag(matched.code);
+              setTimeout(() => setActiveFlag(null), 1500);
+            }
+
+            // High-fidelity Scoring System
+            const now = Date.now();
+            const timeSinceLastGuess = lastGuessTimeRef.current ? (now - lastGuessTimeRef.current) / 1000 : 0;
+            lastGuessTimeRef.current = now;
+
+            const basePoints = getCountryPoints(matched);
+            const hopMultiplier = 1 + (newList.length * 0.15);
+
+            let speedBonus = 0;
+            if (timeSinceLastGuess > 0 && timeSinceLastGuess <= 6) {
+              speedBonus = Math.floor((6 - timeSinceLastGuess) * 150);
+            } else if (timeSinceLastGuess > 0 && timeSinceLastGuess <= 15) {
+              speedBonus = Math.floor((15 - timeSinceLastGuess) * 50);
+            }
+
+            const avoidedChokeBonus = chokeIds.size > 0 ? 400 : 0;
+            const rawPoints = basePoints + speedBonus + avoidedChokeBonus;
+            
+            // Multiply score by the respective difficulty settings (Memory Mode, Time, and Supply Difficulty configs)
+            const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+            const totalScaleMultiplier = currentMultiplier * difficultyMultiplier * config.scoreMultiplier;
+            const linkPoints = Math.max(120, Math.floor((rawPoints * hopMultiplier) * totalScaleMultiplier));
+
+            setScore(p => p + linkPoints);
+            playSynthSound('success');
+
+            // Handle Combo Accumulator for EMP Override
+            setSupplyConsecutiveLinks(prev => {
+              const next = prev + 1;
+              if (next >= 4) {
+                setSupplyOverrideCharges(c => {
+                  if (c < 2) {
+                    playSynthSound('shield');
+                    setFeedback({ text: `⚡ COMBO 4X: INTERCEPT EMP OVERRIDE CHARGED (+1 CHARGE!)`, type: 'success' });
+                    setTimeout(() => setFeedback(null), 2500);
+                    return c + 1;
+                  } else {
+                    setFeedback({ text: `⚡ COMBO 4X: EMP CHARGES AT MAXIMUM DENSITY`, type: 'info' });
+                    setTimeout(() => setFeedback(null), 2000);
+                    return c;
+                  }
+                });
+                return 0;
+              }
+              return next;
+            });
+            
+            if (matched.id === endId) {
+              const timeBonus = timeLeft * 15;
+              const efficiencyBonus = Math.max(1000, 5000 - (decayIds.size * 500));
+              const finalCompletionPoints = Math.floor((5000 + timeBonus + efficiencyBonus) * totalScaleMultiplier);
+
+              setScore(p => p + finalCompletionPoints);
+              setFeedback({ text: `💥 INTERCEPT COMPLETE! +${finalCompletionPoints} PTS COMPLETION BONUS!`, type: 'success' });
+              setTimeout(() => setFeedback(null), 4000);
+              finishGame();
+            } else {
+              setFeedback({ text: `LINK SECURED: ${matched.name.toUpperCase()} CONNECTED (+${linkPoints} PTS)`, type: 'success' });
+              setTimeout(() => setFeedback(null), 1500);
+            }
+          } else {
+            const activeNode = COUNTRIES.find(c => c.id === activeId);
+            setSupplyConsecutiveLinks(0); // Reset consecutive links count on failure
+            setScore(p => Math.max(0, p - 50)); // Adjusted to a fair -50 PTS penalty for typos
+            setFeedback({ text: `LINK FAILURE: MUST BORDER ${activeNode?.name || 'CURRENT SECTOR'} (-50 PTS)`, type: 'error' });
+            setTimeout(() => setFeedback(null), 2000);
+          }
+        } else if (normalized !== '') {
+          setSupplyConsecutiveLinks(0); // Reset combo count on wrong sector name
+          setFeedback({ text: `Sector not found: ${inputValue}`, type: 'error' });
+          setTimeout(() => setFeedback(null), 1500);
         }
         return;
       }
@@ -963,7 +2003,8 @@ export default function App() {
         
         // Scoring logic
         const basePoints = getCountryPoints(matchedCountry);
-        const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier);
+        const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+        const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * config.scoreMultiplier);
 
         setScore(prev => prev + points);
 
@@ -975,7 +2016,8 @@ export default function App() {
           finishGame();
         }
       } else if (normalized !== '') {
-        setFeedback({ text: `Not found: ${inputValue}`, type: 'error' });
+        setScore(prev => Math.max(0, prev - 10));
+        setFeedback({ text: `Not found: ${inputValue} (-10 PTS)`, type: 'error' });
         setTimeout(() => setFeedback(null), 2000);
       }
     }
@@ -1254,7 +2296,8 @@ export default function App() {
           setMostRecentGuessedId(target.id);
           
           const basePoints = getCountryPoints(target);
-          const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+          const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+          const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * config.scoreMultiplier * 1.5); 
           setScore(prev => prev + points);
           
           setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
@@ -1303,7 +2346,8 @@ export default function App() {
           setMostRecentGuessedId(target.id);
           
           const basePoints = getCountryPoints(target);
-          const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * 1.5); 
+          const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+          const points = Math.floor(basePoints * currentMultiplier * difficultyMultiplier * config.scoreMultiplier * 1.5); 
           setScore(prev => prev + points);
           
           setFeedback({ text: `CORRECT: ${target.name.toUpperCase()}`, type: 'success' });
@@ -1468,11 +2512,87 @@ export default function App() {
       setCurrentTargetHighlightId(null);
       setSkippedHighlightsCount({});
       setDeferredHighlights([]);
+
+      // Initialize Typing Submodes
+      if (typerMode === 'rogue') {
+        const activeCountries = COUNTRIES.map(c => c.id);
+        const randomId = activeCountries[Math.floor(Math.random() * activeCountries.length)];
+        setInfectedIds(new Set([randomId]));
+        setShieldedIds(new Set());
+        setRogueEmpCharge(0);
+        setRogueLogs([
+          { id: 'init', text: '[SYSTEM LOG] Patched Grid. Patient Zero isolated.', type: 'info' }
+        ]);
+        
+        syncSupplyChainStart(null);
+        syncSupplyChainEnd(null);
+        syncSupplyChainActive(null);
+        syncSupplyChainPathIds(new Set());
+        syncSupplyChainPathList([]);
+        syncSupplyChainDecayIds(new Set());
+        syncSupplyChainChokeIds(new Set());
+        setSupplyChainCrisisMessage(null);
+      } else if (typerMode === 'supply_chain') {
+        if (!supplyChainStartId || !supplyChainEndId) {
+          loadSupplyChainPreset(selectedSupplyPreset);
+        } else {
+          setSupplyOverrideCharges(1);
+          setSupplyConsecutiveLinks(0);
+          setSupplyRadarScans(2);
+          setSupplyDisruptors(1);
+          syncSupplyChainDecayIds(new Set());
+          syncSupplyChainChokeIds(new Set());
+          setInfectedIds(new Set());
+          syncSupplyChainActive(supplyChainStartId);
+          syncSupplyChainPathIds(new Set([supplyChainStartId]));
+          syncSupplyChainPathList([supplyChainStartId]);
+
+          const currentStartCountry = COUNTRIES.find(c => c.id === supplyChainStartId);
+          const currentEndCountry = COUNTRIES.find(c => c.id === supplyChainEndId);
+          const label = `${currentStartCountry?.name || 'Sector Start'} to ${currentEndCountry?.name || 'Sector Destination'}`;
+          setSupplyChainCrisisMessage(`GRID LINK COMMENCED: Connect ${label}`);
+        }
+      } else {
+        setInfectedIds(new Set());
+        syncSupplyChainStart(null);
+        syncSupplyChainEnd(null);
+        syncSupplyChainActive(null);
+        syncSupplyChainPathIds(new Set());
+        syncSupplyChainPathList([]);
+        syncSupplyChainDecayIds(new Set());
+        syncSupplyChainChokeIds(new Set());
+        setSupplyChainCrisisMessage(null);
+      }
     }
   };
 
   const resetGame = () => {
     setGuessedIds(new Set());
+    setInfectedIds(new Set());
+    setShieldedIds(new Set());
+    setRogueEmpCharge(0);
+    setRogueLogs([]);
+    syncSupplyChainStart(null);
+    syncSupplyChainEnd(null);
+    syncSupplyChainActive(null);
+    syncSupplyChainPathIds(new Set());
+    syncSupplyChainPathList([]);
+    syncSupplyChainDecayIds(new Set());
+    syncSupplyChainChokeIds(new Set());
+    setSupplyChainCrisisMessage(null);
+    setSupplyOverrideCharges(1);
+    setSupplyConsecutiveLinks(0);
+    setSupplyRadarScans(2);
+    setSupplyDisruptors(1);
+    supplyChainRef.current = {
+      startId: null,
+      endId: null,
+      activeId: null,
+      pathIds: new Set(),
+      pathList: [],
+      decayIds: new Set(),
+      chokeIds: new Set()
+    };
     setLastGuessedId(null);
     setStartTime(null);
     setHasStarted(false);
@@ -1696,25 +2816,39 @@ export default function App() {
               )}
 
               {gameType === 'typing' && (
-                <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
-                  <button 
-                    onClick={() => setGameMode('zen')}
-                    className={cn(
-                      "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
-                      gameMode === 'zen' ? "bg-emerald-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
-                    )}
-                  >
-                    Zen
-                  </button>
-                  <button 
-                    onClick={() => setGameMode('challenge')}
-                    className={cn(
-                      "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
-                      gameMode === 'challenge' ? "bg-amber-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
-                    )}
-                  >
-                    Hard
-                  </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
+                    <select
+                      value={typerMode}
+                      onChange={(e) => setTyperMode(e.target.value as any)}
+                      className="bg-transparent border-0 text-[8px] lg:text-[10px] font-mono font-bold uppercase text-cyan-400 outline-none px-2 py-1 cursor-pointer"
+                    >
+                      <option value="default" className="bg-neutral-950 text-white">Classic Terminal</option>
+                      <option value="rogue" className="bg-neutral-950 text-white">Rogue Outbreak</option>
+                      <option value="supply_chain" className="bg-neutral-950 text-white">Supply Intercept</option>
+                    </select>
+                  </div>
+
+                  <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
+                    <button 
+                      onClick={() => setGameMode('zen')}
+                      className={cn(
+                        "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
+                        gameMode === 'zen' ? "bg-emerald-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
+                      )}
+                    >
+                      Zen
+                    </button>
+                    <button 
+                      onClick={() => setGameMode('challenge')}
+                      className={cn(
+                        "px-2 lg:px-3 py-1 rounded text-[8px] lg:text-[10px] font-bold uppercase transition-all",
+                        gameMode === 'challenge' ? "bg-amber-500 text-black shadow-lg" : "text-neutral-500 hover:text-neutral-300"
+                      )}
+                    >
+                      Hard
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1731,7 +2865,7 @@ export default function App() {
                 <Brain className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
               </button>
 
-              {(gameMode === 'challenge' || gameType === 'flag') && (
+              {(gameMode === 'challenge' || gameType === 'flag' || (gameType === 'typing' && typerMode === 'supply_chain')) && (
                 <div className="flex items-center gap-1">
                   {gameType === 'flag' && <span className="text-[7px] lg:text-[9px] text-neutral-500 font-mono uppercase">Time:</span>}
                   <select 
@@ -1739,9 +2873,7 @@ export default function App() {
                     onChange={(e) => {
                       const dur = Number(e.target.value);
                       setSelectedDuration(dur);
-                      if (gameType === 'flag') {
-                        startGame(dur, 'flag', flagCountLimit);
-                      }
+                      startGame(dur, gameType);
                     }}
                     className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-amber-500 outline-hidden"
                   >
@@ -1759,7 +2891,7 @@ export default function App() {
                 <span className="text-[7px] lg:text-[10px] text-neutral-500 font-mono uppercase leading-none">Time</span>
                 <div className="flex items-center gap-1 text-white font-mono leading-none">
                   <Timer className="w-2.5 h-2.5 lg:w-4 lg:h-4 text-emerald-500" />
-                  <span className="text-[12px] lg:text-lg">{(gameMode === 'challenge' || (gameType === 'flag' && flagGameMode === 'timed')) ? formatTime(timeLeft) : formatTime(timeElapsed)}</span>
+                  <span className="text-[12px] lg:text-lg">{(gameMode === 'challenge' || (gameType === 'flag' && flagGameMode === 'timed') || (gameType === 'typing' && typerMode === 'supply_chain')) ? formatTime(timeLeft) : formatTime(timeElapsed)}</span>
                 </div>
             </div>
               
@@ -2222,25 +3354,420 @@ export default function App() {
               </div>
 
               {!isSatelliteView && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
-                    <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Guessed</span>
-                    <span className="text-xl font-bold">
-                      {guessedIds.size} <span className="text-[9px] font-normal text-neutral-600">/ {gameType === 'flag' ? flagCountLimit : COUNTRIES.length}</span>
-                    </span>
+                <>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800 animate-fade-in">
+                      <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Guessed</span>
+                      <span className="text-xl font-bold">
+                        {guessedIds.size} <span className="text-[9px] font-normal text-neutral-600">/ {gameType === 'flag' ? flagCountLimit : COUNTRIES.length}</span>
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800 animate-fade-in">
+                      <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Multiplier</span>
+                      <span className="text-xl font-bold text-emerald-500">
+                        x{currentMultiplier.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
-                    <span className="text-[9px] text-neutral-500 font-mono uppercase block mb-1">Multiplier</span>
-                    <span className="text-xl font-bold text-emerald-500">
-                      x{currentMultiplier.toFixed(2)}
-                    </span>
+
+                  {/* Condensed Difficulty Sector Matrix (Global across all modes) */}
+                  <div className="p-3 bg-neutral-950/85 border border-cyan-500/15 rounded-xl text-xs font-mono shadow-md">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] text-cyan-500/80 font-bold uppercase tracking-wider flex items-center gap-1">
+                        <Gauge className="w-3.5 h-3.5 text-cyan-400" /> THREAT SECTORS
+                      </span>
+                      <span className="text-[8.5px] font-extrabold text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-900/50 leading-none">
+                        XP Mult: {SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty].scoreMultiplier.toFixed(1)}x
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-1 py-1 text-center">
+                      {[1, 2, 3, 4, 5].map((lvl) => {
+                        const config = SUPPLY_DIFFICULTY_CONFIGS[lvl];
+                        const isCurrent = supplyDifficulty === lvl;
+                        return (
+                          <button
+                            key={`global-threat-lvl-${lvl}`}
+                            onClick={() => {
+                              setSupplyDifficulty(lvl);
+                              playSynthSound('success');
+                            }}
+                            className={cn(
+                              "py-1 rounded font-extrabold cursor-pointer border transition-all text-[9.5px] leading-none",
+                              isCurrent 
+                                ? "bg-cyan-500/15 border-cyan-500 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.25)] font-black"
+                                : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-cyan-400 hover:border-neutral-700 hover:bg-neutral-950"
+                            )}
+                            title={`${config.badge}: ${config.name} (${config.description})`}
+                          >
+                            L{lvl}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 custom-scrollbar space-y-4">
-               {!isMemoryMode ? (
+               {gameType === 'typing' && typerMode === 'rogue' ? (
+                 <div className="space-y-4">
+                    {/* Header Notification */}
+                    <div className="flex items-center justify-between border-b border-rose-950/40 pb-2">
+                      <label className="text-[10px] text-rose-500 font-mono uppercase tracking-widest animate-pulse flex items-center gap-1.5 font-black">
+                         <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+                         GRID INTRUSION THREAT
+                      </label>
+                      <span className="text-[9px] font-mono bg-rose-950/50 text-rose-300 border border-rose-900/50 px-1.5 py-0.5 rounded uppercase">
+                        Sectors Affected: {infectedIds.size} / 120
+                      </span>
+                    </div>
+
+                    {/* Tactical EMP Charge Dock */}
+                    <div className="p-3.5 bg-neutral-950/60 border border-neutral-800/80 rounded-xl space-y-2.5 relative overflow-hidden shadow-inner">
+                      <div className="flex justify-between items-center font-mono">
+                        <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-yellow-500 animate-pulse shrink-0" />
+                          EMP CAPACITOR SHUNT
+                        </span>
+                        <span className={cn(
+                          "text-[10px] font-mono font-black",
+                          rogueEmpCharge >= 100 ? "text-yellow-400 animate-bounce" : "text-neutral-500"
+                        )}>
+                          {rogueEmpCharge}% {rogueEmpCharge >= 100 ? "READY" : "CHARGING"}
+                        </span>
+                      </div>
+                      {/* Progress Bar Container */}
+                      <div className="h-2.5 w-full bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80 p-0.5">
+                        <motion.div 
+                          className={cn(
+                            "h-full rounded-full",
+                            rogueEmpCharge >= 100 
+                              ? "bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-500 shadow-[0_0_12px_rgba(250,204,21,0.65)]" 
+                              : "bg-cyan-500"
+                          )}
+                          style={{ width: `${rogueEmpCharge}%` }}
+                          animate={{ width: `${rogueEmpCharge}%` }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      </div>
+                      
+                      {/* Activation Button */}
+                      <button
+                        onClick={triggerRogueEmp}
+                        disabled={rogueEmpCharge < 100}
+                        className={cn(
+                          "w-full py-2 px-2.5 rounded-lg font-mono text-[9px] font-black tracking-widest uppercase transition-all duration-300 border",
+                          rogueEmpCharge >= 100 
+                            ? "bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 hover:from-yellow-400 hover:to-amber-500 text-neutral-950 border-yellow-300 cursor-pointer active:scale-95" 
+                            : "bg-neutral-950/50 border-neutral-900 text-neutral-600 cursor-not-allowed"
+                        )}
+                      >
+                        {rogueEmpCharge >= 100 ? "⚡ COMPRESS RADAR [CLICK TO FIRE BLAST]" : "⚡ SECURE ADJACENT ZONES TO ACCELERATE"}
+                      </button>
+                    </div>
+
+                    {/* Left/Right Grid Lists for Outbreaks and Firewalls */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Threat list */}
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] text-rose-400 font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0 animate-pulse" />
+                          ⚠️ SECTORS Compromised ({infectedIds.size})
+                        </span>
+                        <div className="space-y-1.5 max-h-[160px] overflow-y-auto custom-scrollbar border border-neutral-900 bg-neutral-950/20 rounded-lg p-2">
+                          {[...infectedIds].map((id, index) => {
+                            const country = COUNTRIES.find(c => c.id === id);
+                            if (!country) return null;
+                            const isLastInfected = index === infectedIds.size - 1;
+                            const displayName = isLastInfected 
+                              ? country.name 
+                              : country.name.replace(/[a-zA-Z0-9]/g, 'x');
+                            return (
+                              <motion.div 
+                                key={`infected-list-${id}`}
+                                initial={{ opacity: 0, x: -5 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className={cn(
+                                  "flex items-center justify-between p-1.5 rounded transition-all border",
+                                  isLastInfected 
+                                    ? "bg-red-500/10 border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.25)] font-bold" 
+                                    : "bg-red-950/5 border-red-900/10"
+                                )}
+                              >
+                                <span className={cn(
+                                  "text-[10px] font-mono uppercase tracking-wider truncate max-w-[124px]",
+                                  isLastInfected ? "text-red-400 font-black animate-pulse" : "text-neutral-600 font-normal"
+                                )}>
+                                  {displayName}
+                                </span>
+                                <span className={cn(
+                                  "text-[8px] font-mono font-bold shrink-0",
+                                  isLastInfected ? "text-red-400 animate-pulse" : "text-red-900"
+                                )}>
+                                  {isLastInfected ? "NEW!" : "CRIT"}
+                                </span>
+                              </motion.div>
+                            );
+                          })}
+                          {infectedIds.size === 0 && (
+                            <div className="text-center py-4 text-emerald-500 font-mono text-xs">
+                              ✓ Isolated. No infection.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Firewall list */}
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] text-cyan-400 font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                          <Shield className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          🛡️ FIREWALL BARRIERS ({shieldedIds.size})
+                        </span>
+                        <div className="space-y-1.5 max-h-[160px] overflow-y-auto custom-scrollbar border border-neutral-900 bg-neutral-950/20 rounded-lg p-2">
+                          {[...shieldedIds].map(id => {
+                            const country = COUNTRIES.find(c => c.id === id);
+                            if (!country) return null;
+                            return (
+                              <motion.div 
+                                key={`shielded-list-${id}`}
+                                initial={{ opacity: 0, x: 5 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center justify-between p-1.5 rounded bg-cyan-950/20 border border-cyan-900/30 text-cyan-100"
+                              >
+                                <span className="text-[10px] font-mono uppercase tracking-wider truncate max-w-[120px] font-medium">{country.name}</span>
+                                <span className="text-[8px] font-mono text-cyan-400 font-bold shrink-0">SHIELD</span>
+                              </motion.div>
+                            );
+                          })}
+                          {shieldedIds.size === 0 && (
+                            <div className="text-center py-2.5 text-neutral-500 font-mono text-[9px] leading-relaxed">
+                              *No Firewalls. Secure borderline areas to block viral spreads!*
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Grid Log Feed Console */}
+                    <div className="space-y-2 pt-2">
+                      <span className="text-[9px] text-neutral-400 font-mono uppercase tracking-wider block font-bold flex items-center gap-1">
+                        <Terminal className="w-3 h-3 text-cyan-500 shrink-0" />
+                        SECURE LOGGING TERMINAL
+                      </span>
+                      <div className="bg-neutral-950 rounded-lg border border-neutral-900 p-2.5 h-[130px] overflow-y-auto font-mono text-[9px] text-neutral-400 space-y-1 custom-scrollbar">
+                        {rogueLogs.map(log => (
+                          <div 
+                            key={log.id} 
+                            className={cn(
+                              "leading-relaxed break-words border-l-2 pl-1.5 my-0.5",
+                              log.type === 'warn' ? 'border-rose-600 text-rose-400 bg-rose-950/5' :
+                              log.type === 'success' ? 'border-emerald-600 text-emerald-400 bg-emerald-950/5' :
+                              'border-cyan-600 text-cyan-400 bg-cyan-950/5'
+                            )}
+                          >
+                            {log.text}
+                          </div>
+                        ))}
+                        {rogueLogs.length === 0 && (
+                          <div className="text-neutral-600 italic py-2">SYSTEM STANDBY. INBOUND METRICS IDLE...</div>
+                        )}
+                      </div>
+                    </div>
+                 </div>
+               ) : gameType === 'typing' && typerMode === 'supply_chain' ? (
+                 <div>
+                    <label className="text-[10px] text-cyan-400 font-mono uppercase tracking-widest block mb-2 lg:mb-4 sticky top-0 bg-[#0c0c0c] py-2 z-10 flex items-center gap-1.5 font-bold font-sans">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0 font-sans" />
+                      🛰️ FLIGHTPATH ROUTER
+                    </label>
+
+                    {/* Tactical Flight Profile with Inline Route Shuffling */}
+                    <div className="p-3 bg-neutral-950/90 border border-neutral-800 rounded-xl space-y-2 mb-3 text-xs font-mono pb-3 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+                      <div className="flex items-center justify-between border-b border-neutral-900 pb-1.5 opacity-80 text-[7.5px] tracking-wider text-neutral-500 font-bold">
+                        <span>PROFILE: CORRIDOR-INT</span>
+                        {!hasStarted || isFinished ? (
+                          <button
+                            onClick={() => {
+                              loadSupplyChainPreset('random_dynamic');
+                              playSynthSound('purge');
+                            }}
+                            className="text-cyan-400 hover:text-cyan-300 font-extrabold uppercase shrink-0 flex items-center gap-1 transition-colors cursor-pointer select-none"
+                            title="Reforge another randomized dynamic route pair"
+                          >
+                            <RefreshCcw className="w-2.5 h-2.5 hover:animate-spin" /> SHUFFLE ROUTE
+                          </button>
+                        ) : (
+                          <span className="text-cyan-500">ACTIVE LINK</span>
+                        )}
+                      </div>
+
+                      {supplyChainCrisisMessage && (
+                        <div className="text-[9.5px] text-cyan-400 animate-pulse border-b border-cyan-500/25 pb-1.5 mb-1.5 font-bold uppercase tracking-wider">
+                          {supplyChainCrisisMessage}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-1 py-1 text-center text-[10px]">
+                        <div className="flex flex-col bg-[#111112] p-1.5 rounded border border-neutral-900">
+                          <span className="text-[7.5px] text-neutral-500 font-bold mb-0.5">START</span>
+                          <span className="text-emerald-400 font-bold truncate">
+                            {COUNTRIES.find(c => c.id === supplyChainStartId)?.name || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col bg-[#111112] p-1.5 rounded border border-cyan-950/40">
+                          <span className="text-[7.5px] text-cyan-400 font-bold mb-0.5">ACTIVE</span>
+                          <span className="text-cyan-300 font-extrabold truncate animate-pulse">
+                            {COUNTRIES.find(c => c.id === supplyChainActiveId)?.name || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col bg-[#111112] p-1.5 rounded border border-neutral-900">
+                          <span className="text-[7.5px] text-neutral-500 font-bold mb-0.5">DESTINATION</span>
+                          <span className="text-blue-400 font-bold truncate">
+                            {COUNTRIES.find(c => c.id === supplyChainEndId)?.name || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {supplyChainBFSData && (
+                        <div className="pt-2 border-t border-neutral-900 space-y-1.5 mt-1.5">
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-neutral-500 font-semibold">ROUTE STATUS:</span>
+                            {supplyChainBFSData.solvable ? (
+                              <span className="text-emerald-400 font-bold uppercase">SECURED & SOLVABLE</span>
+                            ) : supplyChainBFSData.hasDetour ? (
+                              <span className="text-amber-400 font-bold uppercase">DETOUR ADVISORY</span>
+                            ) : (
+                              <span className="text-red-500 font-bold uppercase animate-pulse">PATH SEVERED</span>
+                            )}
+                          </div>
+                          {supplyChainBFSData.distance >= 0 && (
+                            <div className="flex justify-between items-center text-[9px]">
+                              <span className="text-neutral-500 font-semibold">EST. SECTOR JUMPS:</span>
+                              <span className="text-cyan-400 font-bold font-mono">
+                                {supplyChainBFSData.distance} {supplyChainBFSData.distance === 1 ? 'SECTOR' : 'SECTORS'}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center text-[9px]">
+                            <span className="text-neutral-500 font-semibold">RECOM. WAYPOINT:</span>
+                            <span className={cn(
+                              "font-bold font-mono text-[9px] tracking-tight text-right shrink-0 max-w-[150px] truncate",
+                              supplyChainBFSData.solvable ? "text-amber-400" : "text-red-400 font-semibold"
+                            )}>
+                              {supplyChainBFSData.nextHop.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tactical Support Grid Dashboard */}
+                    <div className="p-3 bg-neutral-950/85 border border-cyan-500/10 rounded-xl mb-3 text-xs font-mono shadow-md">
+                      <div className="flex justify-between items-center mb-2.5">
+                        <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                          <Activity className="w-3.5 h-3.5 text-cyan-400" /> SUPPORT CONSOLE
+                        </span>
+                        <span className="text-[8px] text-neutral-500 font-bold bg-neutral-900/50 px-1.5 py-0.5 rounded border border-neutral-800">
+                          COMBO: <span className="text-cyan-400 font-bold">{supplyConsecutiveLinks}/4</span>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        {/* 1. EMP OVERRIDE */}
+                        <button
+                          onClick={triggerSupplyOverride}
+                          disabled={supplyOverrideCharges <= 0}
+                          title="EMP Override: Polarize latest decayed node or blockade"
+                          className={cn(
+                            "flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer relative select-none",
+                            supplyOverrideCharges > 0
+                              ? "bg-cyan-500/5 hover:bg-cyan-500/15 border-cyan-500/30 text-cyan-300 shadow-sm active:scale-95"
+                              : "bg-neutral-900/30 border-neutral-900/50 text-neutral-600 cursor-not-allowed"
+                          )}
+                        >
+                          <Zap className={cn("w-3.5 h-3.5 mb-1.5", supplyOverrideCharges > 0 && "animate-pulse")} />
+                          <span className="text-[7.5px] font-bold block leading-none">EMP LINK</span>
+                          <span className={cn(
+                            "text-[10px] font-extrabold mt-1 px-1.5 py-0.2 rounded font-mono leading-none",
+                            supplyOverrideCharges > 0 ? "bg-cyan-950/85 text-cyan-400 border border-cyan-800/40" : "text-neutral-600"
+                          )}>{supplyOverrideCharges}</span>
+                        </button>
+
+                        {/* 2. RADAR SCAN */}
+                        <button
+                          onClick={triggerRadarScan}
+                          disabled={supplyRadarScans <= 0}
+                          title="Optimal Waypoint Radar: Identify target neighboring sector"
+                          className={cn(
+                            "flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer relative select-none",
+                            supplyRadarScans > 0
+                              ? "bg-amber-500/5 hover:bg-amber-500/15 border-amber-500/30 text-amber-300 shadow-sm active:scale-95"
+                              : "bg-neutral-900/30 border-neutral-900/50 text-neutral-600 cursor-not-allowed"
+                          )}
+                        >
+                          <Satellite className="w-3.5 h-3.5 mb-1.5" />
+                          <span className="text-[7.5px] font-bold block leading-none">RADAR MAP</span>
+                          <span className={cn(
+                            "text-[10px] font-extrabold mt-1 px-1.5 py-0.2 rounded font-mono leading-none",
+                            supplyRadarScans > 0 ? "bg-amber-950/85 text-amber-400 border border-amber-800/40" : "text-neutral-600"
+                          )}>{supplyRadarScans}</span>
+                        </button>
+
+                        {/* 3. CHOKE DISRUPTOR */}
+                        <button
+                          onClick={triggerChokeDisruptor}
+                          disabled={supplyDisruptors <= 0}
+                          title="Choke Disruptor: Dissolve active choke blockades"
+                          className={cn(
+                            "flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer relative select-none",
+                            supplyDisruptors > 0
+                              ? "bg-rose-500/5 hover:bg-rose-500/15 border-rose-500/30 text-rose-300 shadow-sm active:scale-95"
+                              : "bg-neutral-900/30 border-neutral-900/50 text-neutral-600 cursor-not-allowed"
+                          )}
+                        >
+                          <Shield className="w-3.5 h-3.5 mb-1.5" />
+                          <span className="text-[7.5px] font-bold block leading-none">DISRUPT</span>
+                          <span className={cn(
+                            "text-[10px] font-extrabold mt-1 px-1.5 py-0.2 rounded font-mono leading-none",
+                            supplyDisruptors > 0 ? "bg-rose-950/85 text-rose-400 border border-rose-800/40" : "text-neutral-600"
+                          )}>{supplyDisruptors}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar border-t border-neutral-900/40 pt-2 pb-1">
+                      <span className="text-[8.5px] text-neutral-500 font-mono uppercase block mb-1 font-bold">GRID PATH CHANNELS LINKED:</span>
+                      {supplyChainPathList.map((id, index) => {
+                        const country = COUNTRIES.find(c => c.id === id);
+                        if (!country) return null;
+                        const isDecaying = supplyChainDecayIds.has(id);
+                        const isChoking = supplyChainChokeIds.has(id);
+                        return (
+                          <div 
+                            key={`path-list-${id}-${index}`}
+                            className={cn(
+                              "flex items-center gap-2 p-1 px-1.5 rounded text-[10.5px] font-mono border transition-all duration-300",
+                              isDecaying ? "bg-amber-950/15 border-amber-500/30 text-amber-300" :
+                              isChoking ? "bg-red-950/15 border-red-500/30 text-red-300 animate-pulse" :
+                              "bg-neutral-900/40 border-cyan-500/10 text-cyan-300"
+                            )}
+                          >
+                            <span className="text-[8.5px] text-neutral-500">#{index+1}</span>
+                            <span className="truncate flex-1 font-semibold">{country.name}</span>
+                            <span className={cn(
+                              "text-[7px] font-extrabold tracking-wider",
+                              isDecaying ? "text-amber-500" : isChoking ? "text-red-500" : "text-cyan-400"
+                            )}>
+                              {isDecaying ? "DECAY" : isChoking ? "CHOKED" : "LINKED"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+               ) : !isMemoryMode ? (
                  <div>
                    <label className="text-[10px] text-neutral-500 font-mono uppercase tracking-widest block mb-2 lg:mb-4 sticky top-0 bg-[#121212] lg:bg-[#121212] py-1 lg:py-2 z-10">Secured Zones</label>
                  <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
@@ -2797,7 +4324,45 @@ export default function App() {
               <motion.div 
                 key="map"
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                animate={
+                  (gameType === 'typing' && typerMode === 'rogue' && hasStarted && !isPaused && !isFinished)
+                    ? {
+                        opacity: 1,
+                        x: infectedIds.size >= 80 ? [0, -4.5, 4.5, -4.5, 4.5, -2, 2, 0] :
+                           infectedIds.size >= 40 ? [0, -2.5, 2.5, -2.5, 2.5, -1, 1, 0] :
+                           infectedIds.size >= 15 ? [0, -1, 1, -1, 1, 0] : 
+                           isRogueShaking ? [0, -3, 3, -3, 3, -1, 1, 0] : 0,
+                        y: infectedIds.size >= 80 ? [0, 3.5, -3.5, 3.5, -3.5, 1, -1, 0] :
+                           infectedIds.size >= 40 ? [0, 1.8, -1.8, 1.8, -1.8, 0.5, -0.5, 0] :
+                           infectedIds.size >= 15 ? [0, 0.8, -0.8, 0.8, -0.8, 0] : 
+                           isRogueShaking ? [0, 1.5, -1.5, 1.5, -1.5, 0.5, -0.5, 0] : 0,
+                      }
+                    : isRogueShaking 
+                      ? {
+                          opacity: 1,
+                          x: [0, -3, 3, -3, 3, -1, 1, 0],
+                          y: [0, 1.5, -1.5, 1.5, -1.5, 0.5, -0.5, 0],
+                        }
+                      : { opacity: 1 }
+                }
+                transition={
+                  (gameType === 'typing' && typerMode === 'rogue' && hasStarted && !isPaused && !isFinished && infectedIds.size >= 15)
+                    ? {
+                        x: { 
+                          repeat: Infinity, 
+                          duration: infectedIds.size >= 80 ? 0.16 : infectedIds.size >= 40 ? 0.28 : 0.45, 
+                          ease: "linear" 
+                        },
+                        y: { 
+                          repeat: Infinity, 
+                          duration: infectedIds.size >= 80 ? 0.20 : infectedIds.size >= 40 ? 0.32 : 0.50, 
+                          ease: "linear" 
+                        }
+                      }
+                    : isRogueShaking 
+                      ? { duration: 0.35, ease: "easeInOut" } 
+                      : { duration: 0.3 }
+                }
                 exit={{ opacity: 0 }}
                 className="flex-1 relative"
               >
@@ -2813,6 +4378,14 @@ export default function App() {
                   plotContinentsColorMode={plotContinentsColorMode}
                   gameType={gameType}
                   isSatelliteView={isSatelliteView}
+                  infectedIds={infectedIds}
+                  shieldedIds={shieldedIds}
+                  supplyChainStartId={supplyChainStartId}
+                  supplyChainEndId={supplyChainEndId}
+                  supplyChainActiveId={supplyChainActiveId}
+                  supplyChainPathIds={supplyChainPathIds}
+                  supplyChainDecayIds={supplyChainDecayIds}
+                  supplyChainChokeIds={supplyChainChokeIds}
                 />
               
                 {/* Interactive Overlays */}
@@ -3516,6 +5089,8 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5 relative">
+                  {!isSearchAtBottom && (
+                    <>
                   {/* Always-visible Inline Search Bar */}
                   <div className="relative flex items-center bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/25 w-48 sm:w-64 lg:w-72 transition-all">
                     <Search className="w-4 h-4 text-neutral-500 mr-2 shrink-0" />
@@ -3554,7 +5129,7 @@ export default function App() {
                           setShowSurveySearch(false);
                         }
                       }}
-                      placeholder="Search sectors... (Cmd+K)"
+                      placeholder="Search sectors..."
                       className="w-full bg-transparent border-none text-xs font-mono text-white placeholder-neutral-500 outline-none"
                     />
                     {surveySearchQuery && (
@@ -3672,6 +5247,8 @@ export default function App() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  </>
+                  )}
 
                   <button 
                     onClick={() => {
@@ -3708,6 +5285,170 @@ export default function App() {
                       plotContinentsColorMode={plotContinentsColorMode}
                       isSatelliteView={isSatelliteView}
                     />
+
+                    {/* Centered Bottom Search Bar */}
+                    {isSearchAtBottom && (
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center">
+                        <div className="relative flex items-center bg-neutral-950/95 backdrop-blur-md border border-emerald-500/50 rounded-xl px-4 py-2 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/25 w-72 sm:w-96 transition-all shadow-[0_15px_35px_rgba(0,0,0,0.95)]">
+                          <Search className="w-4 h-4 text-emerald-400 mr-2.5 shrink-0" />
+                          <input
+                            ref={surveySearchInputRef}
+                            type="text"
+                            value={surveySearchQuery}
+                            onChange={(e) => {
+                              setSurveySearchQuery(e.target.value);
+                              if (!showSurveySearch) {
+                                setShowSurveySearch(true);
+                              }
+                            }}
+                            onFocus={() => {
+                              setShowSurveySearch(true);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const trimmed = surveySearchQuery.trim().toLowerCase();
+                                if (trimmed) {
+                                  const matches = COUNTRIES.filter(c => 
+                                    c.name.toLowerCase().includes(trimmed) || 
+                                    (c.capital && c.capital.toLowerCase().includes(trimmed)) ||
+                                    c.code.toLowerCase().includes(trimmed)
+                                  );
+                                  if (matches.length > 0) {
+                                    setSelectedExpandedCountryId(matches[0].id);
+                                    surveySearchInputRef.current?.blur();
+                                    setSurveySearchQuery("");
+                                    setShowSurveySearch(false);
+                                  }
+                                }
+                              } else if (e.key === 'Escape') {
+                                surveySearchInputRef.current?.blur();
+                                setSurveySearchQuery("");
+                                setShowSurveySearch(false);
+                              }
+                            }}
+                            placeholder="Search sectors..."
+                            className="w-full bg-transparent border-none text-xs font-mono text-white placeholder-neutral-500 outline-none"
+                          />
+                          {surveySearchQuery && (
+                            <button 
+                              onClick={() => {
+                                setSurveySearchQuery("");
+                                setShowSurveySearch(false);
+                              }}
+                              className="text-neutral-500 hover:text-white shrink-0 ml-1.5 cursor-pointer"
+                              title="Clear query"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <span className="text-[9px] text-neutral-500 font-mono ml-2 border border-neutral-800 rounded px-1.5 py-0.5 select-none uppercase shrink-0">
+                            Cmd+X
+                          </span>
+                        </div>
+
+                        {/* Search list popover directly above the bottom search input! */}
+                        <AnimatePresence>
+                          {showSurveySearch && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 w-80 bg-neutral-950/98 backdrop-blur-md border border-emerald-500/40 p-4 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] font-mono text-xs text-neutral-200"
+                            >
+                              <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2 mb-3 cursor-default">
+                                <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider flex items-center gap-1.5">
+                                  <Search className="w-3.5 h-3.5 animate-pulse" /> SEARCH SECTORS
+                                </span>
+                                <button 
+                                  onClick={() => {
+                                    setShowSurveySearch(false);
+                                    setSurveySearchQuery("");
+                                  }}
+                                  className="text-neutral-500 hover:text-white cursor-pointer"
+                                  title="Close Search"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                              
+                              {/* Matching search list results */}
+                              <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar text-left pr-1">
+                                {(() => {
+                                  const trimmed = surveySearchQuery.trim().toLowerCase();
+                                  if (!trimmed) {
+                                    return (
+                                      <div className="text-[10px] text-neutral-500 italic text-center py-4 select-none">
+                                        Type to search countries...
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  const matches = COUNTRIES.filter(c => 
+                                    c.name.toLowerCase().includes(trimmed) || 
+                                    (c.capital && c.capital.toLowerCase().includes(trimmed)) ||
+                                    c.code.toLowerCase().includes(trimmed)
+                                  );
+                                  
+                                  if (matches.length === 0) {
+                                    return (
+                                      <div className="text-[10px] text-rose-500 italic text-center py-4 select-none">
+                                        No matching sectors found.
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  return matches.slice(0, 15).map(country => {
+                                    const isGuessed = viewingRecord.guessedIds?.includes(country.id);
+                                    return (
+                                      <button
+                                        key={`search-res-bottom-${country.id}`}
+                                        onClick={() => {
+                                          setSelectedExpandedCountryId(country.id);
+                                          setShowSurveySearch(false);
+                                          setSurveySearchQuery("");
+                                        }}
+                                        className={cn(
+                                          "w-full flex items-center justify-between p-1.5 rounded hover:bg-neutral-900 border transition-all text-left truncate cursor-pointer",
+                                          selectedExpandedCountryId === country.id 
+                                            ? "border-emerald-500/50 bg-emerald-500/10 font-bold" 
+                                            : "border-transparent text-neutral-300 hover:text-white"
+                                        )}
+                                      >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <img 
+                                            src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} 
+                                            className="h-3.5 w-5 rounded-sm object-cover border border-white/10 shrink-0" 
+                                            alt="" 
+                                          />
+                                          <div className="truncate min-w-0">
+                                            <p className="text-[11px] uppercase truncate leading-none mb-0.5">{country.name}</p>
+                                            <p className="text-[8px] opacity-40 leading-none truncate">{country.capital || "Classified"}</p>
+                                          </div>
+                                        </div>
+                                        <span className={cn(
+                                          "text-[8px] font-mono border px-1 rounded uppercase font-bold shrink-0",
+                                          isGuessed 
+                                            ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20" 
+                                            : "bg-red-950/20 text-red-500 border-red-500/10 opacity-70"
+                                        )}>
+                                          {isGuessed ? "Guessed" : "Missed"}
+                                        </span>
+                                      </button>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                              
+                              <div className="text-[8px] text-neutral-600 font-bold tracking-widest uppercase border-t border-neutral-900 pt-2 mt-2 flex justify-between select-none">
+                                <span>PRESS ENTER TO CHOOSE</span>
+                                <span>{COUNTRIES.length} SECTORS TOTAL</span>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
 
                     {/* Console Stats HUD Popover Overlay */}
                     <AnimatePresence>
