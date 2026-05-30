@@ -4,6 +4,7 @@ import * as topojson from 'topojson-client';
 import { motion, AnimatePresence } from 'motion/react';
 import { CountryData } from '../types';
 import { COUNTRIES } from '../data/countries';
+import { findSupplyChainPath } from '../data/borders';
 import { cn } from '../lib/utils';
 import { Gauge, Play, Pause, X, Sliders, Map as MapIcon } from 'lucide-react';
 
@@ -28,6 +29,8 @@ interface WorldMapProps {
   supplyChainDecayIds?: Set<string>;
   supplyChainChokeIds?: Set<string>;
   shieldedIds?: Set<string>;
+  immuneCountryIds?: Set<string>;
+  supplyChainOverlayMode?: 'optimal' | 'user';
 }
 
 const CONTINENT_FILL_COLORS: Record<string, string> = {
@@ -70,7 +73,9 @@ export function WorldMap({
   supplyChainPathIds = new Set(),
   supplyChainDecayIds = new Set(),
   supplyChainChokeIds = new Set(),
-  shieldedIds = new Set()
+  shieldedIds = new Set(),
+  immuneCountryIds = new Set(),
+  supplyChainOverlayMode = 'user'
 }: WorldMapProps) {
   const [mapLoaded, setMapLoaded] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -87,12 +92,19 @@ export function WorldMap({
 
   const infectedIdsRef = useRef(infectedIds);
   const shieldedIdsRef = useRef(shieldedIds);
+  const immuneCountryIdsRef = useRef(immuneCountryIds);
   const supplyChainStartIdRef = useRef(supplyChainStartId);
   const supplyChainEndIdRef = useRef(supplyChainEndId);
   const supplyChainActiveIdRef = useRef(supplyChainActiveId);
   const supplyChainPathIdsRef = useRef(supplyChainPathIds);
   const supplyChainDecayIdsRef = useRef(supplyChainDecayIds);
   const supplyChainChokeIdsRef = useRef(supplyChainChokeIds);
+  const supplyChainOverlayModeRef = useRef(supplyChainOverlayMode);
+
+  useEffect(() => {
+    supplyChainOverlayModeRef.current = supplyChainOverlayMode;
+    if (mapLoaded) updateMapColors(true);
+  }, [supplyChainOverlayMode, mapLoaded]);
 
   useEffect(() => { 
     infectedIdsRef.current = infectedIds; 
@@ -102,6 +114,10 @@ export function WorldMap({
     shieldedIdsRef.current = shieldedIds; 
     if (mapLoaded) updateMapColors(true);
   }, [shieldedIds, mapLoaded]);
+  useEffect(() => { 
+    immuneCountryIdsRef.current = immuneCountryIds; 
+    if (mapLoaded) updateMapColors(true);
+  }, [immuneCountryIds, mapLoaded]);
   useEffect(() => { 
     supplyChainStartIdRef.current = supplyChainStartId; 
     if (mapLoaded) updateMapColors(true);
@@ -210,7 +226,8 @@ export function WorldMap({
 
   useEffect(() => {
     isFinishedRef.current = isFinished;
-  }, [isFinished]);
+    if (mapLoaded) updateMapColors(true);
+  }, [isFinished, mapLoaded]);
 
   useEffect(() => {
     guessedIdsRef.current = guessedIds;
@@ -262,7 +279,75 @@ export function WorldMap({
           return '#facc15';
         }
 
-        // Supply Chain Intercept State fills
+        if (isFinishedRef.current) {
+          if (infectedIdsRef.current && infectedIdsRef.current.has(id)) {
+            return '#ef4444'; // Active aggressive infection red
+          }
+          if (shieldedIdsRef.current && shieldedIdsRef.current.has(id)) {
+            return '#06b6d4'; // Active cyan firewall shield
+          }
+          if (immuneCountryIdsRef.current && immuneCountryIdsRef.current.has(id)) {
+            return '#047857'; // Vibrant protective emerald-700 for active immunization
+          }
+
+          if (supplyChainStartIdRef.current && supplyChainEndIdRef.current) {
+            const start = supplyChainStartIdRef.current;
+            const end = supplyChainEndIdRef.current;
+
+            const avoidList = new Set<string>();
+            if (supplyChainDecayIdsRef.current) {
+              const decayIdsNode = supplyChainDecayIdsRef.current;
+              if (typeof (decayIdsNode as any).forEach === 'function') {
+                (decayIdsNode as any).forEach((item: string) => avoidList.add(item));
+              } else if (Array.isArray(decayIdsNode)) {
+                (decayIdsNode as string[]).forEach((item: string) => avoidList.add(item));
+              }
+            }
+            if (supplyChainChokeIdsRef.current) {
+              const chokeIdsNode = supplyChainChokeIdsRef.current;
+              if (typeof (chokeIdsNode as any).forEach === 'function') {
+                (chokeIdsNode as any).forEach((item: string) => avoidList.add(item));
+              } else if (Array.isArray(chokeIdsNode)) {
+                (chokeIdsNode as string[]).forEach((item: string) => avoidList.add(item));
+              }
+            }
+            let bestPath = findSupplyChainPath(start, end, avoidList);
+            if (!bestPath) {
+              bestPath = findSupplyChainPath(start, end, new Set());
+            }
+            const bestPathSet = new Set(bestPath || []);
+            
+            if (supplyChainOverlayModeRef.current === 'optimal') {
+              if (bestPathSet.has(id)) {
+                return '#22c55e'; // green path for optimal route
+              }
+            } else {
+              if (supplyChainPathIdsRef.current && supplyChainPathIdsRef.current.has(id)) {
+                return '#fbbf24'; // yellow path for my answer
+              }
+            }
+
+            if (plotContinentsColorModeRef.current) {
+              const continent = countryContinentMap.get(id);
+              if (continent && CONTINENT_FILL_COLORS[continent]) {
+                return CONTINENT_FILL_COLORS[continent];
+              }
+            }
+            return '#262626';
+          }
+
+          if (guessedIdsRef.current.has(id)) return '#4ade80';
+
+          if (plotContinentsColorModeRef.current) {
+            const continent = countryContinentMap.get(id);
+            if (continent && CONTINENT_FILL_COLORS[continent]) {
+              return CONTINENT_FILL_COLORS[continent];
+            }
+          }
+          return '#262626';
+        }
+
+        // Supply Chain Intercept State fills (active gameplay)
         if (supplyChainActiveIdRef.current === id) {
           return '#fbbf24'; // Glowing golden-yellow for active routing head
         }
@@ -292,6 +377,11 @@ export function WorldMap({
           return '#06b6d4'; // Active cyan firewall shield
         }
 
+        // Rogue Mode immune fills
+        if (immuneCountryIdsRef.current && immuneCountryIdsRef.current.has(id)) {
+          return '#047857'; // Vibrant protective emerald-700 for active immunization
+        }
+
         if (plotContinentsColorModeRef.current) {
           const continent = countryContinentMap.get(id);
           if (continent && CONTINENT_FILL_COLORS[continent]) {
@@ -302,11 +392,6 @@ export function WorldMap({
         if (highlightedAllianceMemberIdsRef.current && highlightedAllianceMemberIdsRef.current.has(id)) {
           // Tactical alliance blue color
           return '#3b82f6';
-        }
-        
-        if (isFinishedRef.current) {
-          if (guessedIdsRef.current.has(id)) return '#4ade80';
-          return '#ef444433';
         }
 
         if (isMemoryModeRef.current) return '#262626';
@@ -321,7 +406,75 @@ export function WorldMap({
           return '#eab308';
         }
 
-        // Supply Chain Intercept and Rogue Mode strokes
+        if (isFinishedRef.current) {
+          if (infectedIdsRef.current && infectedIdsRef.current.has(id)) {
+            return '#f87171'; // red border
+          }
+          if (shieldedIdsRef.current && shieldedIdsRef.current.has(id)) {
+            return '#22d3ee'; // cyan border
+          }
+          if (immuneCountryIdsRef.current && immuneCountryIdsRef.current.has(id)) {
+            return '#059669'; // emerald border
+          }
+
+          if (supplyChainStartIdRef.current && supplyChainEndIdRef.current) {
+            const start = supplyChainStartIdRef.current;
+            const end = supplyChainEndIdRef.current;
+            
+            const avoidList = new Set<string>();
+            if (supplyChainDecayIdsRef.current) {
+              const decayIdsNode = supplyChainDecayIdsRef.current;
+              if (typeof (decayIdsNode as any).forEach === 'function') {
+                (decayIdsNode as any).forEach((item: string) => avoidList.add(item));
+              } else if (Array.isArray(decayIdsNode)) {
+                (decayIdsNode as string[]).forEach((item: string) => avoidList.add(item));
+              }
+            }
+            if (supplyChainChokeIdsRef.current) {
+              const chokeIdsNode = supplyChainChokeIdsRef.current;
+              if (typeof (chokeIdsNode as any).forEach === 'function') {
+                (chokeIdsNode as any).forEach((item: string) => avoidList.add(item));
+              } else if (Array.isArray(chokeIdsNode)) {
+                (chokeIdsNode as string[]).forEach((item: string) => avoidList.add(item));
+              }
+            }
+            let bestPath = findSupplyChainPath(start, end, avoidList);
+            if (!bestPath) {
+              bestPath = findSupplyChainPath(start, end, new Set());
+            }
+            const bestPathSet = new Set(bestPath || []);
+            
+            if (supplyChainOverlayModeRef.current === 'optimal') {
+              if (bestPathSet.has(id)) {
+                return '#4ade80'; // green stroke
+              }
+            } else {
+              if (supplyChainPathIdsRef.current && supplyChainPathIdsRef.current.has(id)) {
+                return '#fde047'; // yellow stroke
+              }
+            }
+
+            if (plotContinentsColorModeRef.current) {
+              const continent = countryContinentMap.get(id);
+              if (continent && CONTINENT_STROKE_COLORS[continent]) {
+                return CONTINENT_STROKE_COLORS[continent];
+              }
+            }
+            return '#404040';
+          }
+
+          if (guessedIdsRef.current.has(id)) return '#059669';
+
+          if (plotContinentsColorModeRef.current) {
+            const continent = countryContinentMap.get(id);
+            if (continent && CONTINENT_STROKE_COLORS[continent]) {
+              return CONTINENT_STROKE_COLORS[continent];
+            }
+          }
+          return '#404040';
+        }
+
+        // Supply Chain Intercept and Rogue Mode strokes (active gameplay)
         if (supplyChainActiveIdRef.current === id) {
           return '#fbbf24'; // Glowing yellow stroke for active routing head
         }
@@ -346,6 +499,9 @@ export function WorldMap({
         if (shieldedIdsRef.current && shieldedIdsRef.current.has(id)) {
           return '#22d3ee'; // Cyan bright neon boundary for walls
         }
+        if (immuneCountryIdsRef.current && immuneCountryIdsRef.current.has(id)) {
+          return '#34d399'; // Bright glowing emerald border for immune zones
+        }
 
         if (plotContinentsColorModeRef.current) {
           const continent = countryContinentMap.get(id);
@@ -357,11 +513,6 @@ export function WorldMap({
         if (highlightedAllianceMemberIdsRef.current && highlightedAllianceMemberIdsRef.current.has(id)) {
           // Tactical light-blue stroke
           return '#60a5fa';
-        }
-        
-        if (isFinishedRef.current) {
-          if (guessedIdsRef.current.has(id)) return '#059669';
-          return '#ef444466';
         }
 
         if (isMemoryModeRef.current) return '#404040';

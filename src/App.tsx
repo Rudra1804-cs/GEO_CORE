@@ -49,7 +49,8 @@ import {
   Shield,
   Terminal,
   Gauge,
-  Activity
+  Activity,
+  Flame
 } from 'lucide-react';
 import { COUNTRIES, TOTAL_LAND_AREA, TOTAL_GLOBAL_GDP, CONTINENT_STATS } from './data/countries';
 import { getCountryNeighbors, getSupplyChainNeighbors, findSupplyChainPath } from './data/borders';
@@ -325,6 +326,12 @@ export default function App() {
   const [rogueEmpCharge, setRogueEmpCharge] = useState<number>(0);
   const [isRogueShaking, setIsRogueShaking] = useState<boolean>(false);
   const [rogueLogs, setRogueLogs] = useState<{ id: string; text: string; type: 'warn' | 'success' | 'info' }[]>([]);
+  const [immuneCountryIds, setImmuneCountryIds] = useState<Set<string>>(new Set());
+  const [countrySaveCounts, setCountrySaveCounts] = useState<Record<string, number>>({});
+  const [continentBreaks, setContinentBreaks] = useState<Record<string, number>>({});
+  const [consecutiveContinent, setConsecutiveContinent] = useState<string | null>(null);
+  const [consecutiveContinentCount, setConsecutiveContinentCount] = useState<number>(0);
+  const [lastSecuredCountryId, setLastSecuredCountryId] = useState<string | null>(null);
   
   // Supply Chain state
   const [supplyChainStartId, setSupplyChainStartId] = useState<string | null>(null);
@@ -335,6 +342,7 @@ export default function App() {
   const [supplyChainDecayIds, setSupplyChainDecayIds] = useState<Set<string>>(new Set());
   const [supplyChainChokeIds, setSupplyChainChokeIds] = useState<Set<string>>(new Set());
   const [supplyChainCrisisMessage, setSupplyChainCrisisMessage] = useState<string | null>(null);
+  const [supplyChainOverlayMode, setSupplyChainOverlayMode] = useState<'optimal' | 'user'>('user');
   const [supplyDifficulty, setSupplyDifficulty] = useState<number>(3); // Levels: 1 (Easy), 2 (Normal), 3 (Hard), 4 (Expert), 5 (Insane)
   const [supplyOverrideCharges, setSupplyOverrideCharges] = useState<number>(1); // Active ability: Clears decay/chokes
   const [supplyConsecutiveLinks, setSupplyConsecutiveLinks] = useState<number>(0); // Earning override charge combo tracker
@@ -363,6 +371,52 @@ export default function App() {
 
   const lastGuessTimeRef = useRef<number>(0);
 
+  const SUPPLY_CHAIN_L_CONFIGS: Record<number, {
+    level: number;
+    name: string;
+    badge: string;
+    decayInterval: number;
+    crisisInterval: number;
+    description: string;
+    scoreMultiplier: number;
+    maxChokes: number;
+    color: string;
+  }> = {
+    1: {
+      level: 1,
+      name: "Toughest Route",
+      badge: "TOUGHEST",
+      decayInterval: 2500,
+      crisisInterval: 6000,
+      description: "Severe choke points and rapid route decay.",
+      scoreMultiplier: 2.5,
+      maxChokes: 3,
+      color: "from-red-600 to-purple-600 text-rose-500 hover:bg-rose-500/5 hover:border-rose-500/60"
+    },
+    2: {
+      level: 2,
+      name: "Tactical Route",
+      badge: "NORMAL",
+      decayInterval: 6500,
+      crisisInterval: 14000,
+      description: "Moderate threat level with standard routing times.",
+      scoreMultiplier: 1.5,
+      maxChokes: 2,
+      color: "from-amber-500 to-orange-600 text-amber-400 hover:bg-amber-500/5 hover:border-amber-500/60"
+    },
+    3: {
+      level: 3,
+      name: "Easiest Route",
+      badge: "EASIEST",
+      decayInterval: 13000,
+      crisisInterval: 28000,
+      description: "Relaxed pace with slowly decaying supply sectors.",
+      scoreMultiplier: 1.0,
+      maxChokes: 1,
+      color: "from-emerald-500 to-green-600 text-emerald-400 hover:bg-emerald-500/5 hover:border-emerald-500/60"
+    }
+  };
+
   const SUPPLY_DIFFICULTY_CONFIGS: Record<number, {
     level: number;
     name: string;
@@ -376,25 +430,25 @@ export default function App() {
   }> = {
     1: {
       level: 1,
-      name: "Safe Passage",
-      badge: "EASY",
-      decayInterval: 12000,
-      crisisInterval: 25000,
-      description: "Relaxed pace with very slow decay. Airspace blockades are disabled.",
-      scoreMultiplier: 0.7,
-      maxChokes: 0,
-      color: "from-emerald-500 to-green-600 text-emerald-400"
+      name: "Black Swan Shock",
+      badge: "INSANE",
+      decayInterval: 2200,
+      crisisInterval: 4500,
+      description: "Near-instant decay and chaotic multi-blockades. Pure, frantic geographic reflexes.",
+      scoreMultiplier: 3.5,
+      maxChokes: 4,
+      color: "from-purple-600 to-red-600 text-purple-400"
     },
     2: {
       level: 2,
-      name: "Strategic Passage",
-      badge: "NORMAL",
-      decayInterval: 8500,
-      crisisInterval: 18000,
-      description: "Standard flow with moderate decay rate and basic airspace turbulence.",
-      scoreMultiplier: 1.0,
-      maxChokes: 1,
-      color: "from-cyan-500 to-blue-600 text-cyan-400"
+      name: "Sovereign Embargo",
+      badge: "EXPERT",
+      decayInterval: 4000,
+      crisisInterval: 8000,
+      description: "Extreme decay speeds. Blockades trigger rapidly, threatening complete chain collapse.",
+      scoreMultiplier: 2.2,
+      maxChokes: 3,
+      color: "from-rose-500 to-pink-600 text-rose-400"
     },
     3: {
       level: 3,
@@ -409,25 +463,25 @@ export default function App() {
     },
     4: {
       level: 4,
-      name: "Sovereign Embargo",
-      badge: "EXPERT",
-      decayInterval: 4000,
-      crisisInterval: 8000,
-      description: "Extreme decay speeds. Blockades trigger rapidly, threatening complete chain collapse.",
-      scoreMultiplier: 2.2,
-      maxChokes: 3,
-      color: "from-rose-500 to-pink-600 text-rose-400"
+      name: "Strategic Passage",
+      badge: "NORMAL",
+      decayInterval: 8500,
+      crisisInterval: 18000,
+      description: "Standard flow with moderate decay rate and basic airspace turbulence.",
+      scoreMultiplier: 1.0,
+      maxChokes: 1,
+      color: "from-cyan-500 to-blue-600 text-cyan-400"
     },
     5: {
       level: 5,
-      name: "Black Swan Shock",
-      badge: "INSANE",
-      decayInterval: 2200,
-      crisisInterval: 4500,
-      description: "Near-instant decay and chaotic multi-blockades. Pure, frantic geographic reflexes.",
-      scoreMultiplier: 3.5,
-      maxChokes: 4,
-      color: "from-purple-600 to-red-600 text-purple-400"
+      name: "Safe Passage",
+      badge: "EASY",
+      decayInterval: 12000,
+      crisisInterval: 25000,
+      description: "Relaxed pace with very slow decay. Airspace blockades are disabled.",
+      scoreMultiplier: 0.7,
+      maxChokes: 0,
+      color: "from-emerald-500 to-green-600 text-emerald-400"
     }
   };
 
@@ -603,8 +657,8 @@ export default function App() {
         'fr_za': { start: "250", end: "710", label: "France to South Africa (Trans-African Backbone)" },
         'us_br': { start: "840", end: "076", label: "United States to Brazil (Pan-American Highway)" },
         'eg_ru': { start: "818", end: "643", label: "Egypt to Russia (Suez-Siberian Corridor)" },
-        'de_jp': { start: "276", end: "392", label: "Germany to Japan (Eurasian Silk Network)" },
-        'us_fr': { start: "840", end: "250", label: "United States to France (North-Atlantic Transoceanic)" },
+        'de_jp': { start: "276", end: "156", label: "Germany to China (Eurasian Silk Network)" },
+        'us_fr': { start: "124", end: "590", label: "Canada to Panama (Pan-American Highway)" },
       };
       preset = presetsMap[presetKey] || presetsMap['sp_in'];
     }
@@ -760,7 +814,7 @@ export default function App() {
   const [showSurveyStatsPopup, setShowSurveyStatsPopup] = useState(false);
   const [selectedExpandedCountryId, setSelectedExpandedCountryId] = useState<string | null>(null);
   const [selectedAllianceName, setSelectedAllianceName] = useState<string | null>(null);
-  const [expansionPanelTab, setExpansionPanelTab] = useState<'countries' | 'alliances' | 'resources'>('countries');
+  const [expansionPanelTab, setExpansionPanelTab] = useState<'countries' | 'alliances' | 'resources' | 'rogue' | 'supply_route'>('countries');
   const [hideSectorsStats, setHideSectorsStats] = useState(false);
   const [isContinentPanelCollapsed, setIsContinentPanelCollapsed] = useState(false);
   const [showSurveySearch, setShowSurveySearch] = useState(false);
@@ -795,19 +849,37 @@ export default function App() {
 
     if (gameType === 'typing' && typerMode === 'rogue') {
       const rogueIntervals: Record<number, number> = {
-        1: 5500,
-        2: 4500,
+        1: 1500,
+        2: 2500,
         3: 3500,
-        4: 2500,
-        5: 1500
+        4: 4500,
+        5: 5500
       };
       const activeInterval = rogueIntervals[supplyDifficulty] || 3500;
 
       // Periodic infection spread in Rogue State mode
       rogueTimer = setInterval(() => {
         setInfectedIds(prev => {
+          const isContinentOnBreak = (contVal?: string): boolean => {
+            if (!contVal) return false;
+            const expiry = continentBreaksRef.current[contVal];
+            return expiry ? Date.now() < expiry : false;
+          };
+
           if (prev.size === 0) {
-            const activeCountries = COUNTRIES.map(c => c.id);
+            const activeCountries = COUNTRIES.filter(c => {
+              if (immuneCountryIdsRef.current.has(c.id)) return false;
+              if (isContinentOnBreak(c.continent)) return false;
+              
+              if (supplyDifficulty >= 3) {
+                const subNeighbors = getCountryNeighbors(c.id);
+                if (subNeighbors.length > 0 && subNeighbors.every(snid => immuneCountryIdsRef.current.has(snid))) {
+                  return false;
+                }
+              }
+              return true;
+            }).map(c => c.id);
+            if (activeCountries.length === 0) return prev;
             const randomId = activeCountries[Math.floor(Math.random() * activeCountries.length)];
             return new Set([randomId]);
           }
@@ -822,11 +894,29 @@ export default function App() {
           }
 
           const next = new Set(prev);
-          // Spread to neighbors (45% chance for each infected), but respect defensive firewalls (shieldedIds)
+          // Spread to neighbors (45% chance for each infected), but respect defensive firewalls (shieldedIds), immunity, and breaks
           prev.forEach(id => {
+            if (immuneCountryIdsRef.current.has(id)) {
+              return;
+            }
             if (Math.random() < 0.45) {
               const neighbors = getCountryNeighbors(id);
-              const uninfectedNeighbors = neighbors.filter(nid => !next.has(nid) && !shieldedIdsRef.current.has(nid));
+              const uninfectedNeighbors = neighbors.filter(nid => {
+                if (next.has(nid) || shieldedIdsRef.current.has(nid) || immuneCountryIdsRef.current.has(nid)) {
+                  return false;
+                }
+                const c = COUNTRIES.find(x => x.id === nid);
+                if (c && isContinentOnBreak(c.continent)) {
+                  return false;
+                }
+                if (supplyDifficulty >= 3) {
+                  const subNeighbors = getCountryNeighbors(nid);
+                  if (subNeighbors.length > 0 && subNeighbors.every(snid => immuneCountryIdsRef.current.has(snid))) {
+                    return false;
+                  }
+                }
+                return true;
+              });
               if (uninfectedNeighbors.length > 0) {
                 const randomNeighbor = uninfectedNeighbors[Math.floor(Math.random() * uninfectedNeighbors.length)];
                 next.add(randomNeighbor);
@@ -834,12 +924,26 @@ export default function App() {
             }
           });
 
-          // Spontaneous outbreak (30% chance), bypassing firewalled sectors
+          // Spontaneous outbreak (30% chance), bypassing firewalled / immune / continent-break sectors
           if (Math.random() < 0.3 && next.size < 20) {
-            const activeCountries = COUNTRIES.map(c => c.id);
-            const uninfectedCountries = activeCountries.filter(id => !next.has(id) && !shieldedIdsRef.current.has(id));
-            if (uninfectedCountries.length > 0) {
-              const randomId = uninfectedCountries[Math.floor(Math.random() * uninfectedCountries.length)];
+            const activeCountries = COUNTRIES.filter(c => {
+              if (next.has(c.id) || shieldedIdsRef.current.has(c.id) || immuneCountryIdsRef.current.has(c.id)) {
+                return false;
+              }
+              if (isContinentOnBreak(c.continent)) {
+                return false;
+              }
+              if (supplyDifficulty >= 3) {
+                const subNeighbors = getCountryNeighbors(c.id);
+                if (subNeighbors.length > 0 && subNeighbors.every(snid => immuneCountryIdsRef.current.has(snid))) {
+                  return false;
+                }
+              }
+              return true;
+            }).map(c => c.id);
+
+            if (activeCountries.length > 0) {
+              const randomId = activeCountries[Math.floor(Math.random() * activeCountries.length)];
               next.add(randomId);
             }
           }
@@ -855,7 +959,7 @@ export default function App() {
     }
 
     if (gameType === 'typing' && typerMode === 'supply_chain') {
-      const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+      const config = SUPPLY_CHAIN_L_CONFIGS[supplyDifficulty] || SUPPLY_CHAIN_L_CONFIGS[2];
 
       // 1. Data Decay wave: consumes path link-by-link
       supplyDecayTimer = setInterval(() => {
@@ -1035,6 +1139,16 @@ export default function App() {
   useEffect(() => {
     shieldedIdsRef.current = shieldedIds;
   }, [shieldedIds]);
+
+  const immuneCountryIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    immuneCountryIdsRef.current = immuneCountryIds;
+  }, [immuneCountryIds]);
+
+  const continentBreaksRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    continentBreaksRef.current = continentBreaks;
+  }, [continentBreaks]);
   const typeSoundPool = useRef<HTMLAudioElement[]>([]);
   const returnSoundRef = useRef<HTMLAudioElement | null>(null);
 
@@ -1058,11 +1172,22 @@ export default function App() {
         gameType: gameType,
         flagCountLimit: gameType === 'flag' ? flagCountLimit : null,
         flagDuration: gameType === 'flag' ? selectedDuration : null,
-        originalFlagQueue: gameType === 'flag' ? originalFlagQueue : null
+        originalFlagQueue: gameType === 'flag' ? originalFlagQueue : null,
+        countrySaveCounts: countrySaveCounts,
+        immuneCountryIds: Array.from(immuneCountryIds),
+        infectedIds: Array.from(infectedIds),
+        shieldedIds: Array.from(shieldedIds),
+        typerMode: typerMode,
+        supplyDifficulty: supplyDifficulty,
+        supplyChainStartId: gameType === 'typing' && typerMode === 'supply_chain' ? supplyChainStartId : null,
+        supplyChainEndId: gameType === 'typing' && typerMode === 'supply_chain' ? supplyChainEndId : null,
+        supplyChainPathList: gameType === 'typing' && typerMode === 'supply_chain' ? supplyChainPathList : null,
+        supplyChainDecayIds: gameType === 'typing' && typerMode === 'supply_chain' ? Array.from(supplyChainDecayIds) : null,
+        supplyChainChokeIds: gameType === 'typing' && typerMode === 'supply_chain' ? Array.from(supplyChainChokeIds) : null
       };
     }
     return null;
-  }, [selectedRecordIndex, leaderboard, isFinished, playerName, isGuest, score, guessedIds, gameMode, completionTime, selectedDuration, gameType, flagCountLimit, originalFlagQueue]);
+  }, [selectedRecordIndex, leaderboard, isFinished, playerName, isGuest, score, guessedIds, gameMode, completionTime, selectedDuration, gameType, flagCountLimit, originalFlagQueue, countrySaveCounts, immuneCountryIds, infectedIds, shieldedIds, typerMode, supplyDifficulty, supplyChainStartId, supplyChainEndId, supplyChainPathList, supplyChainDecayIds, supplyChainChokeIds]);
 
   useEffect(() => {
     // Auth Listener
@@ -1752,13 +1877,112 @@ export default function App() {
             const points = Math.floor(350 * config.scoreMultiplier);
             setScore(p => p + points);
             playSynthSound('success');
-            addRogueLog(`✓ Contained active infection in ${matched.name}`, 'success');
-            
+
+            // 1. Rogue game save immunization tracking
+            const savesNeeded = 6 - supplyDifficulty;
+            const currentSaveCount = (countrySaveCounts[matched.id] || 0) + 1;
+            setCountrySaveCounts(prev => ({ ...prev, [matched.id]: currentSaveCount }));
+
+            const isImmunized = currentSaveCount >= savesNeeded;
+            if (isImmunized) {
+              setImmuneCountryIds(prev => {
+                const next = new Set(prev);
+                next.add(matched.id);
+                return next;
+              });
+              addRogueLog(`🛡️ IMMUNE: ${matched.name} is now non-contagious & immune to Rogue!`, 'success');
+            }
+
+            // 2. Consecutive continent streak tracking for secures
+            const streakNeeded = supplyDifficulty === 1 ? 5 : supplyDifficulty === 2 ? 4 : supplyDifficulty === 3 ? 3 : 2;
+            let nextCount = 1;
+            if (consecutiveContinent === matched.continent) {
+              nextCount = consecutiveContinentCount + 1;
+            }
+            setConsecutiveContinent(matched.continent);
+
+            let triggeredBreak = false;
+            let breakDuration = 15;
+
+            if (supplyDifficulty === 1) {
+              breakDuration = 15;
+              if (nextCount >= 5) {
+                setConsecutiveContinentCount(0);
+                const expiry = Date.now() + breakDuration * 1000;
+                setContinentBreaks(prev => ({ ...prev, [matched.continent]: expiry }));
+                addRogueLog(`🛡️ CONTINENT STRIKE SECURED: ${matched.continent.toUpperCase()} gained 15s disease reprieve!`, 'success');
+                triggeredBreak = true;
+              } else {
+                setConsecutiveContinentCount(nextCount);
+                addRogueLog(`✓ Contained active infection in ${matched.name} (${matched.continent} streak: ${nextCount}/5)`, 'success');
+              }
+            } else if (supplyDifficulty === 2) {
+              breakDuration = 30;
+              if (nextCount >= 4) {
+                setConsecutiveContinentCount(0);
+                const expiry = Date.now() + breakDuration * 1000;
+                setContinentBreaks(prev => ({ ...prev, [matched.continent]: expiry }));
+                addRogueLog(`🛡️ CONTINENT STRIKE SECURED: ${matched.continent.toUpperCase()} gained 30s disease reprieve!`, 'success');
+                triggeredBreak = true;
+              } else {
+                setConsecutiveContinentCount(nextCount);
+                addRogueLog(`✓ Contained active infection in ${matched.name} (${matched.continent} streak: ${nextCount}/4)`, 'success');
+              }
+            } else if (supplyDifficulty === 3) {
+              breakDuration = 45;
+              if (nextCount >= 3) {
+                setConsecutiveContinentCount(0);
+                const expiry = Date.now() + breakDuration * 1000;
+                setContinentBreaks(prev => ({ ...prev, [matched.continent]: expiry }));
+                addRogueLog(`🛡️ CONTINENT STRIKE SECURED: ${matched.continent.toUpperCase()} gained 45s disease reprieve!`, 'success');
+                triggeredBreak = true;
+              } else {
+                setConsecutiveContinentCount(nextCount);
+                addRogueLog(`✓ Contained active infection in ${matched.name} (${matched.continent} streak: ${nextCount}/3)`, 'success');
+              }
+            } else if (supplyDifficulty === 4) {
+              breakDuration = 60;
+              const lastCountry = lastSecuredCountryId ? COUNTRIES.find(c => c.id === lastSecuredCountryId) : null;
+              const areBorders = lastSecuredCountryId ? getCountryNeighbors(lastSecuredCountryId).includes(matched.id) : false;
+              if (lastCountry && lastCountry.continent === matched.continent && areBorders) {
+                setConsecutiveContinentCount(0);
+                const expiry = Date.now() + breakDuration * 1000;
+                setContinentBreaks(prev => ({ ...prev, [matched.continent]: expiry }));
+                addRogueLog(`🛡️ ADJACENT SHIELD SECURED: ${matched.continent.toUpperCase()} gained 60s disease reprieve (Borders cleared)!`, 'success');
+                triggeredBreak = true;
+              } else {
+                setConsecutiveContinentCount(1);
+                addRogueLog(`✓ Contained active infection in ${matched.name} (Need bordering ${matched.continent} country to trigger 60s rest)`, 'info');
+              }
+            } else if (supplyDifficulty === 5) {
+              breakDuration = 75;
+              const lastCountry = lastSecuredCountryId ? COUNTRIES.find(c => c.id === lastSecuredCountryId) : null;
+              const areBorders = lastSecuredCountryId ? getCountryNeighbors(lastSecuredCountryId).includes(matched.id) : false;
+              if (lastCountry && lastCountry.continent === matched.continent && !areBorders) {
+                setConsecutiveContinentCount(0);
+                const expiry = Date.now() + breakDuration * 1000;
+                setContinentBreaks(prev => ({ ...prev, [matched.continent]: expiry }));
+                addRogueLog(`🛡️ DISTAL SHIELD SECURED: ${matched.continent.toUpperCase()} gained 75s disease reprieve (Non-bordering secured)!`, 'success');
+                triggeredBreak = true;
+              } else {
+                setConsecutiveContinentCount(1);
+                addRogueLog(`✓ Contained active infection in ${matched.name} (Need non-bordering ${matched.continent} country to trigger 75s rest)`, 'info');
+              }
+            }
+
+            setLastSecuredCountryId(matched.id);
+
             // Increment EMP charge on containment
             setRogueEmpCharge(prev => Math.min(100, prev + 12));
 
-            setFeedback({ text: `CONTAINED ACTIVE ROGUE INFECTION: ${matched.name.toUpperCase()}`, type: 'success' });
-            setTimeout(() => setFeedback(null), 2000);
+            if (triggeredBreak) {
+              setFeedback({ text: `🛡️ CONTINENT SHIELD: ${matched.continent.toUpperCase()} GAINED ${breakDuration}s OUTBREAK REPRIEVE!`, type: 'success' });
+            } else if (isImmunized) {
+              setFeedback({ text: `🛡️ ${matched.name.toUpperCase()} IMMUNIZED! (SAVED ${currentSaveCount}/${savesNeeded} TIMES)`, type: 'success' });
+            } else {
+              setFeedback({ text: `CONTAINED ACTIVE ROGUE INFECTION: ${matched.name.toUpperCase()} (${currentSaveCount}/${savesNeeded} SAVES)`, type: 'success' });
+            }
+            setTimeout(() => setFeedback(null), triggeredBreak ? 3000 : 2000);
 
             // Play correct alert flag sound if available of course
             if (matched.code) {
@@ -1768,8 +1992,18 @@ export default function App() {
 
             // Reprieve outbreak if they cleared everything
             if (newInfected.size === 0) {
-              const activeCountries = COUNTRIES.map(c => c.id);
-              const randomNext = activeCountries[Math.floor(Math.random() * activeCountries.length)];
+              const activeCountries = COUNTRIES.filter(c => {
+                if (immuneCountryIds.has(c.id)) return false;
+                if (supplyDifficulty >= 3) {
+                  const subNeighbors = getCountryNeighbors(c.id);
+                  if (subNeighbors.length > 0 && subNeighbors.every(snid => immuneCountryIds.has(snid))) {
+                    return false;
+                  }
+                }
+                return true;
+              }).map(c => c.id);
+              const chosenCountries = activeCountries.length > 0 ? activeCountries : COUNTRIES.map(c => c.id);
+              const randomNext = chosenCountries[Math.floor(Math.random() * chosenCountries.length)];
               setInfectedIds(new Set([randomNext]));
               addRogueLog(`⚠ Anomalies found. New outbreak patient zero in ${COUNTRIES.find(c => c.id === randomNext)?.name}`, 'warn');
               setFeedback({ text: "OUTBREAK CONTAINED. DETECTING SPAWNING SYSTEM ANOMALIES...", type: 'info' });
@@ -1794,12 +2028,13 @@ export default function App() {
                 return next;
               });
               playSynthSound('shield');
-              addRogueLog(`🛡️ Firewall established: ${matched.name}`, 'info');
+              const firewallSeconds = (12 + supplyDifficulty * 2) + (matched.gdp >= 500000 ? 4 : matched.gdp >= 50000 ? 2 : 0);
+              addRogueLog(`🛡️ Firewall established on ${matched.name}: online for ${firewallSeconds}s (${matched.gdp >= 500000 ? 'High-tier' : matched.gdp >= 50000 ? 'Mid-tier' : 'Low-tier'} budget: +${matched.gdp >= 500000 ? '4' : matched.gdp >= 50000 ? '2' : '0'}s bonus)`, 'info');
               const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
               const points = Math.floor(100 * config.scoreMultiplier);
               setScore(p => p + points);
 
-              // Remove shield after 15 seconds
+              // Remove shield after calculated duration
               setTimeout(() => {
                 setShieldedIds(prev => {
                   const next = new Set(prev);
@@ -1807,15 +2042,18 @@ export default function App() {
                   return next;
                 });
                 addRogueLog(`✕ Firewall expired: ${matched.name}`, 'warn');
-              }, 15000);
+              }, firewallSeconds * 1000);
 
-              setFeedback({ text: `🛡️ FIREWALL ACTIVE ON: ${matched.name.toUpperCase()} (SECURED FOR 15s)`, type: 'success' });
+              setFeedback({ text: `🛡️ FIREWALL ACTIVE ON: ${matched.name.toUpperCase()} (SECURED FOR ${firewallSeconds}s)`, type: 'success' });
               setInputValue('');
               setTimeout(() => setFeedback(null), 2000);
             } else {
               // Stable country - doesn't border any infected country
               playSynthSound('error');
               setScore(p => Math.max(0, p - 10));
+              setConsecutiveContinent(null);
+              setConsecutiveContinentCount(0);
+              addRogueLog(`✕ Incorrect secure attempt: ${matched.name} is stable! Streak reset!`, 'warn');
               setFeedback({ text: `SECTOR ${matched.name.toUpperCase()} STABLE - NO OUTBREAKS (-10 PTS)`, type: 'info' });
               setInputValue('');
               setTimeout(() => setFeedback(null), 2000);
@@ -1824,6 +2062,9 @@ export default function App() {
         } else if (normalized !== '') {
           playSynthSound('error');
           setScore(p => Math.max(0, p - 10));
+          setConsecutiveContinent(null);
+          setConsecutiveContinentCount(0);
+          addRogueLog(`✕ Unknown sector typed. Streak reset!`, 'warn');
           setFeedback({ text: `Sector not found: ${inputValue} (-10 PTS)`, type: 'error' });
           setTimeout(() => setFeedback(null), 1500);
         }
@@ -1909,7 +2150,9 @@ export default function App() {
             const rawPoints = basePoints + speedBonus + avoidedChokeBonus;
             
             // Multiply score by the respective difficulty settings (Memory Mode, Time, and Supply Difficulty configs)
-            const config = SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3];
+            const config = (gameType === 'typing' && typerMode === 'supply_chain')
+              ? (SUPPLY_CHAIN_L_CONFIGS[supplyDifficulty] || SUPPLY_CHAIN_L_CONFIGS[2])
+              : (SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty] || SUPPLY_DIFFICULTY_CONFIGS[3]);
             const totalScaleMultiplier = currentMultiplier * difficultyMultiplier * config.scoreMultiplier;
             const linkPoints = Math.max(120, Math.floor((rawPoints * hopMultiplier) * totalScaleMultiplier));
 
@@ -2057,7 +2300,18 @@ export default function App() {
       gameType: gameType,
       flagCountLimit: gameType === 'flag' ? flagCountLimit : null,
       flagDuration: gameType === 'flag' ? selectedDuration : null,
-      originalFlagQueue: gameType === 'flag' ? originalFlagQueue : null
+      originalFlagQueue: gameType === 'flag' ? originalFlagQueue : null,
+      countrySaveCounts: gameType === 'typing' && typerMode === 'rogue' ? countrySaveCounts : null,
+      immuneCountryIds: gameType === 'typing' && typerMode === 'rogue' ? Array.from(immuneCountryIds) : null,
+      infectedIds: gameType === 'typing' && typerMode === 'rogue' ? Array.from(infectedIds) : null,
+      shieldedIds: gameType === 'typing' && typerMode === 'rogue' ? Array.from(shieldedIds) : null,
+      typerMode: gameType === 'typing' ? typerMode : null,
+      supplyDifficulty: gameType === 'typing' ? supplyDifficulty : null,
+      supplyChainStartId: gameType === 'typing' && typerMode === 'supply_chain' ? supplyChainStartId : null,
+      supplyChainEndId: gameType === 'typing' && typerMode === 'supply_chain' ? supplyChainEndId : null,
+      supplyChainPathList: gameType === 'typing' && typerMode === 'supply_chain' ? supplyChainPathList : null,
+      supplyChainDecayIds: gameType === 'typing' && typerMode === 'supply_chain' ? Array.from(supplyChainDecayIds) : null,
+      supplyChainChokeIds: gameType === 'typing' && typerMode === 'supply_chain' ? Array.from(supplyChainChokeIds) : null
     };
 
     if (user) {
@@ -2091,7 +2345,14 @@ export default function App() {
     savingRef.current = false;
     setShowNamePrompt(false);
     setShowRecordsView(true);
-    setSelectedRecordIndex(0); 
+    setSelectedRecordIndex(0);
+    if (gameType === 'typing' && typerMode === 'rogue') {
+      setExpansionPanelTab('rogue');
+    } else if (gameType === 'typing' && typerMode === 'supply_chain') {
+      setExpansionPanelTab('supply_route');
+    } else {
+      setExpansionPanelTab('countries');
+    } 
   };
 
   const deleteRecord = (e: React.MouseEvent, index: number) => {
@@ -2273,6 +2534,84 @@ export default function App() {
       // newSkipCount === 2: We don't defer it. We stay on the current target but show the 4 options
       setFeedback({ text: `DECRYPTION CODES ONLINE: SELECT DECRYPTION PATHWAY`, type: 'info' });
       setTimeout(() => setFeedback(null), 2000);
+    }
+  };
+
+  const reshuffleCurrentMission = () => {
+    if (!hasStarted || isFinished) {
+      setFeedback({ text: "ACTIVATE GAMEPLAY INTERFACE TO RE-ROLL MISSIONS", type: 'info' });
+      setTimeout(() => setFeedback(null), 2000);
+      return;
+    }
+    
+    // Play synth success
+    try {
+      playSynthSound('success');
+    } catch (_) {}
+
+    if (gameType === 'flag' && currentTargetFlagId) {
+      const available = COUNTRIES.filter(c => !guessedIds.has(c.id) && c.id !== currentTargetFlagId);
+      if (available.length > 0) {
+        const randomCountry = available[Math.floor(Math.random() * available.length)];
+        const newQueue = [randomCountry.id, ...flagQueue.filter(id => id !== currentTargetFlagId && id !== randomCountry.id)];
+        setFlagQueue(newQueue);
+        setCurrentTargetFlagId(randomCountry.id);
+        
+        const correctName = randomCountry.name;
+        const choices = [correctName];
+        const otherCountries = COUNTRIES.filter(c => c.id !== randomCountry.id);
+        while (choices.length < 4 && otherCountries.length > 0) {
+          const randIdx = Math.floor(Math.random() * otherCountries.length);
+          const name = otherCountries[randIdx].name;
+          if (!choices.includes(name)) {
+            choices.push(name);
+          }
+          otherCountries.splice(randIdx, 1);
+        }
+        setMultipleChoiceOptions(choices.sort(() => Math.random() - 0.5));
+        setFeedback({ text: `FLAG TARGET RE-MUTATED: NEW AGENCY MISSION LOCKED`, type: 'success' });
+      } else {
+        setFeedback({ text: "NO REMAINING ALTERNATE FLAG AGENTS", type: 'info' });
+      }
+      setTimeout(() => setFeedback(null), 1500);
+    } else if (gameType === 'highlight' && currentTargetHighlightId) {
+      const available = COUNTRIES.filter(c => !guessedIds.has(c.id) && c.id !== currentTargetHighlightId);
+      if (available.length > 0) {
+        const randomCountry = available[Math.floor(Math.random() * available.length)];
+        const newQueue = [randomCountry.id, ...highlightQueue.filter(id => id !== currentTargetHighlightId && id !== randomCountry.id)];
+        setHighlightQueue(newQueue);
+        setCurrentTargetHighlightId(randomCountry.id);
+
+        const correctName = randomCountry.name;
+        const choices = [correctName];
+        const otherCountries = COUNTRIES.filter(c => c.id !== randomCountry.id);
+        while (choices.length < 4 && otherCountries.length > 0) {
+          const randIdx = Math.floor(Math.random() * otherCountries.length);
+          const name = otherCountries[randIdx].name;
+          if (!choices.includes(name)) {
+            choices.push(name);
+          }
+          otherCountries.splice(randIdx, 1);
+        }
+        setMultipleChoiceOptions(choices.sort(() => Math.random() - 0.5));
+        setFeedback({ text: `TACTICAL CODES MUTATED: SECTOR ALIGNMENT SET`, type: 'success' });
+      } else {
+        setFeedback({ text: "NO SECTORS REMAINING FOR GLOBAL RE-ROLL", type: 'info' });
+      }
+      setTimeout(() => setFeedback(null), 1500);
+    } else if (gameType === 'typing') {
+      if (typerMode === 'rogue') {
+        const count = infectedIds.size > 0 ? infectedIds.size : 5;
+        const available = [...COUNTRIES].sort(() => Math.random() - 0.5).slice(0, count);
+        const newInfected = new Set(available.map(c => c.id));
+        setInfectedIds(newInfected);
+        setRogueEmpCharge(0);
+        setFeedback({ text: `INTRUSION CORRIDOR FLUSH: INFILTRATING NEW CHANNELS`, type: 'success' });
+      } else if (typerMode === 'supply_chain') {
+        loadSupplyChainPreset('random_dynamic');
+        setFeedback({ text: `DYNAMIC SUPPLY PATHWAY REDIRECTED`, type: 'success' });
+      }
+      setTimeout(() => setFeedback(null), 1500);
     }
   };
 
@@ -2520,6 +2859,12 @@ export default function App() {
         setInfectedIds(new Set([randomId]));
         setShieldedIds(new Set());
         setRogueEmpCharge(0);
+        setImmuneCountryIds(new Set());
+        setCountrySaveCounts({});
+        setContinentBreaks({});
+        setConsecutiveContinent(null);
+        setConsecutiveContinentCount(0);
+        setLastSecuredCountryId(null);
         setRogueLogs([
           { id: 'init', text: '[SYSTEM LOG] Patched Grid. Patient Zero isolated.', type: 'info' }
         ]);
@@ -2572,6 +2917,12 @@ export default function App() {
     setShieldedIds(new Set());
     setRogueEmpCharge(0);
     setRogueLogs([]);
+    setImmuneCountryIds(new Set());
+    setCountrySaveCounts({});
+    setContinentBreaks({});
+    setConsecutiveContinent(null);
+    setConsecutiveContinentCount(0);
+    setLastSecuredCountryId(null);
     syncSupplyChainStart(null);
     syncSupplyChainEnd(null);
     syncSupplyChainActive(null);
@@ -2789,8 +3140,8 @@ export default function App() {
                     }}
                     className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-emerald-500 outline-hidden"
                   >
-                    {[5, 10, 20, 50, 100, 195].map(q => (
-                      <option key={q} value={q}>{q} Flags</option>
+                    {[5, 10, 20, 50, 100, 199].map(q => (
+                      <option key={q} value={q}>{q === 199 ? "All 199" : q} Flags</option>
                     ))}
                   </select>
                 </div>
@@ -2808,8 +3159,8 @@ export default function App() {
                     }}
                     className="bg-neutral-900 border border-neutral-800 rounded px-1 lg:px-2 py-0.5 lg:py-1 text-[8px] lg:text-[10px] font-mono text-amber-500 outline-hidden"
                   >
-                    {[5, 10, 20, 50, 100, 195].map(q => (
-                      <option key={q} value={q}>{q} Targets</option>
+                    {[5, 10, 20, 50, 100, 199].map(q => (
+                      <option key={q} value={q}>{q === 199 ? "All 199" : q} Targets</option>
                     ))}
                   </select>
                 </div>
@@ -2820,7 +3171,15 @@ export default function App() {
                   <div className="flex bg-neutral-900/50 rounded-lg p-0.5 border border-neutral-800">
                     <select
                       value={typerMode}
-                      onChange={(e) => setTyperMode(e.target.value as any)}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setTyperMode(val);
+                        if (val === 'supply_chain') {
+                          setSupplyDifficulty(2); // default to normal (level 2)
+                        } else if (val === 'rogue') {
+                          setSupplyDifficulty(3); // default to hard (level 3)
+                        }
+                      }}
                       className="bg-transparent border-0 text-[8px] lg:text-[10px] font-mono font-bold uppercase text-cyan-400 outline-none px-2 py-1 cursor-pointer"
                     >
                       <option value="default" className="bg-neutral-950 text-white">Classic Terminal</option>
@@ -3370,42 +3729,164 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Condensed Difficulty Sector Matrix (Global across all modes) */}
-                  <div className="p-3 bg-neutral-950/85 border border-cyan-500/15 rounded-xl text-xs font-mono shadow-md">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] text-cyan-500/80 font-bold uppercase tracking-wider flex items-center gap-1">
-                        <Gauge className="w-3.5 h-3.5 text-cyan-400" /> THREAT SECTORS
-                      </span>
-                      <span className="text-[8.5px] font-extrabold text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-900/50 leading-none">
-                        XP Mult: {SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty].scoreMultiplier.toFixed(1)}x
-                      </span>
-                    </div>
+                  {/* Interactive Threat Level Selector Dial */}
+                  {gameType === 'typing' && typerMode === 'rogue' && (
+                    <div className="p-2 bg-neutral-950/90 border border-neutral-800/80 rounded-xl text-xs font-mono shadow-md flex flex-col gap-2 select-none shrink-0 border-rose-500/10">
+                      <div className="flex justify-between items-center w-full">
+                        <span className="text-[9px] text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                          <Gauge className="w-3 h-3 text-cyan-400" /> THREAT SECTORS
+                        </span>
+                        <span className="text-[7.5px] font-extrabold text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded border border-cyan-900/50 leading-none">
+                          XP Mult: {SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty].scoreMultiplier.toFixed(1)}x
+                        </span>
+                      </div>
 
-                    <div className="grid grid-cols-5 gap-1 py-1 text-center">
-                      {[1, 2, 3, 4, 5].map((lvl) => {
-                        const config = SUPPLY_DIFFICULTY_CONFIGS[lvl];
-                        const isCurrent = supplyDifficulty === lvl;
-                        return (
-                          <button
-                            key={`global-threat-lvl-${lvl}`}
-                            onClick={() => {
-                              setSupplyDifficulty(lvl);
-                              playSynthSound('success');
-                            }}
-                            className={cn(
-                              "py-1 rounded font-extrabold cursor-pointer border transition-all text-[9.5px] leading-none",
-                              isCurrent 
-                                ? "bg-cyan-500/15 border-cyan-500 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.25)] font-black"
-                                : "bg-neutral-900 border-neutral-800 text-neutral-500 hover:text-cyan-400 hover:border-neutral-700 hover:bg-neutral-950"
-                            )}
-                            title={`${config.badge}: ${config.name} (${config.description})`}
-                          >
-                            L{lvl}
-                          </button>
-                        );
-                      })}
+                      {/* Threat selector options grid */}
+                      <div className="grid grid-cols-5 gap-1 py-0.5 text-center w-full">
+                        {[1, 2, 3, 4, 5].map((lvl) => {
+                          const config = SUPPLY_DIFFICULTY_CONFIGS[lvl];
+                          const isCurrent = supplyDifficulty === lvl;
+                          const colors: Record<number, string> = {
+                            1: "border-purple-500/30 text-purple-400 hover:bg-purple-500/5 hover:border-purple-500/60",
+                            2: "border-rose-500/30 text-rose-400 hover:bg-rose-500/5 hover:border-rose-500/60",
+                            3: "border-amber-500/30 text-amber-400 hover:bg-amber-500/5 hover:border-amber-500/60",
+                            4: "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/5 hover:border-cyan-500/60",
+                            5: "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/5 hover:border-emerald-500/60",
+                          };
+                          const activeBg: Record<number, string> = {
+                            1: "bg-purple-500/15 border-purple-500 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.3)]",
+                            2: "bg-rose-500/15 border-rose-500 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.3)]",
+                            3: "bg-amber-500/15 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]",
+                            4: "bg-cyan-500/15 border-cyan-500 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.3)]",
+                            5: "bg-emerald-500/15 border-emerald-500 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]",
+                          };
+                          return (
+                            <button
+                              key={`global-threat-lvl-${lvl}`}
+                              onClick={() => {
+                                setSupplyDifficulty(lvl);
+                                try {
+                                  playSynthSound('success');
+                                } catch (_) {}
+                              }}
+                              className={cn(
+                                "py-1 rounded font-black cursor-pointer border transition-all text-center flex flex-col items-center justify-center gap-0.5",
+                                isCurrent 
+                                  ? activeBg[lvl] + " font-black scale-[1.03]"
+                                  : "bg-neutral-900/60 border-neutral-800 text-neutral-500 " + colors[lvl]
+                              )}
+                              title={`${config.badge}: ${config.name}`}
+                            >
+                              <span className="text-[6px] opacity-65 font-bold leading-none tracking-wider font-mono">LVL</span>
+                              <span className="text-[10px] leading-none font-extrabold font-mono">{lvl}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Metadata block for the selected threat configuration */}
+                      <div className="w-full text-center px-1.5 py-1 bg-neutral-900/40 border border-neutral-800/40 rounded-lg">
+                        <div className="flex justify-between items-center text-[8px] mb-0.5 font-bold">
+                          <span className={cn(
+                            "tracking-wider uppercase",
+                            supplyDifficulty === 1 && "text-purple-400",
+                            supplyDifficulty === 2 && "text-rose-400",
+                            supplyDifficulty === 3 && "text-amber-400",
+                            supplyDifficulty === 4 && "text-cyan-400",
+                            supplyDifficulty === 5 && "text-emerald-400"
+                          )}>
+                            SEC {supplyDifficulty} • {SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty].badge}
+                          </span>
+                          <span className="text-neutral-500 font-mono text-[7px]">
+                            {SUPPLY_DIFFICULTY_CONFIGS[supplyDifficulty].name.toUpperCase()}
+                          </span>
+                        </div>
+                        {(() => {
+                          const rules: Record<number, string[]> = {
+                            1: [
+                              "1. IMMUNE: Save a region 5 times to gain permanent Outbreak Immunity on it.",
+                              "2. BREAK: 5 consecutive same-continent saves triggers a 15s disease reprieve."
+                            ],
+                            2: [
+                              "1. IMMUNE: Save a region 4 times to gain permanent Outbreak Immunity on it.",
+                              "2. BREAK: 4 consecutive same-continent saves triggers a 30s disease reprieve."
+                            ],
+                            3: [
+                              "1. IMMUNE: Save a region 3 times to gain permanent Outbreak Immunity on it.",
+                              "2. BREAK: 3 consecutive same-continent saves triggers a 45s disease reprieve."
+                            ],
+                            4: [
+                              "1. IMMUNE: Save a region 2 times to gain permanent Outbreak Immunity on it.",
+                              "2. BREAK: Secure adjacent bordering same-continent country for a 60s reprieve."
+                            ],
+                            5: [
+                              "1. IMMUNE: Save a region 1 time (only once!) to gain permanent Outbreak Immunity on it.",
+                              "2. BREAK: Secure distal non-bordering country on same continent for a 75s reprieve."
+                            ]
+                          };
+                          const currentRules = rules[supplyDifficulty] || rules[3];
+                          return (
+                            <p className="text-[7.5px] text-neutral-400 font-mono text-left leading-snug block max-w-full font-medium">
+                              {currentRules[0]}<br />
+                              {currentRules[1]}
+                            </p>
+                          );
+                        })()}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {gameType === 'typing' && typerMode === 'supply_chain' && (
+                    <div className="p-2 bg-neutral-950/90 border border-neutral-800/80 rounded-xl text-xs font-mono shadow-md flex flex-col gap-1.5 select-none shrink-0 max-w-full border-amber-500/10">
+                      <div className="flex justify-between items-center w-full">
+                        <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                          <Gauge className="w-3 h-3 text-amber-400 animate-pulse" /> THREAT SECTORS
+                        </span>
+                        <span className="text-[7.5px] font-extrabold text-amber-400 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-900/50 leading-none">
+                          XP Mult: {(SUPPLY_CHAIN_L_CONFIGS[supplyDifficulty] || SUPPLY_CHAIN_L_CONFIGS[2]).scoreMultiplier.toFixed(1)}x
+                        </span>
+                      </div>
+
+                      {/* Threat selector options grid */}
+                      <div className="grid grid-cols-3 gap-1.5 py-0.5 text-center w-full">
+                        {[1, 2, 3].map((lvl) => {
+                          const config = SUPPLY_CHAIN_L_CONFIGS[lvl];
+                          const isCurrent = supplyDifficulty === lvl;
+                          const colors: Record<number, string> = {
+                            1: "border-red-500/30 text-rose-400 hover:bg-rose-500/5 hover:border-rose-500/60",
+                            2: "border-amber-500/30 text-amber-400 hover:bg-amber-500/5 hover:border-amber-500/60",
+                            3: "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/5 hover:border-emerald-500/60",
+                          };
+                          const activeBg: Record<number, string> = {
+                            1: "bg-rose-500/15 border-rose-500 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.3)]",
+                            2: "bg-amber-500/15 border-amber-500 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.3)]",
+                            3: "bg-emerald-500/15 border-emerald-500 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]",
+                          };
+                          return (
+                            <button
+                              key={`chain-threat-lvl-${lvl}`}
+                              onClick={() => {
+                                setSupplyDifficulty(lvl);
+                                try {
+                                  playSynthSound('success');
+                                } catch (_) {}
+                              }}
+                              className={cn(
+                                "py-1 rounded font-black cursor-pointer border transition-all text-center flex flex-col items-center justify-center gap-0.5",
+                                isCurrent 
+                                  ? activeBg[lvl] + " font-black scale-[1.03]"
+                                  : "bg-neutral-900/60 border-neutral-800 text-neutral-500 " + colors[lvl]
+                              )}
+                              title={`${config.badge}: ${config.name}`}
+                            >
+                              <span className="text-[6px] opacity-65 font-bold leading-none tracking-wider font-mono">LVL</span>
+                              <span className="text-[10px] leading-none font-extrabold font-mono">{lvl}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -4026,11 +4507,25 @@ export default function App() {
                           onClick={() => {
                             setSelectedRecordIndex(i);
                             setRecordTerritorySearch('');
+                            if (entry.gameType === 'typing' && entry.typerMode === 'rogue') {
+                              setExpansionPanelTab('rogue');
+                            } else if (entry.gameType === 'typing' && entry.typerMode === 'supply_chain') {
+                              setExpansionPanelTab('supply_route');
+                            } else {
+                              setExpansionPanelTab('countries');
+                            }
                           }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               setSelectedRecordIndex(i);
                               setRecordTerritorySearch('');
+                              if (entry.gameType === 'typing' && entry.typerMode === 'rogue') {
+                                setExpansionPanelTab('rogue');
+                              } else if (entry.gameType === 'typing' && entry.typerMode === 'supply_chain') {
+                                setExpansionPanelTab('supply_route');
+                              } else {
+                                setExpansionPanelTab('countries');
+                              }
                             }
                           }}
                           className={cn(
@@ -4139,7 +4634,10 @@ export default function App() {
                                   ) : (
                                     <>
                                       <Keyboard className="w-2.5 h-2.5" />
-                                      <span>Typer</span>
+                                      <span>
+                                        {entry.typerMode === 'supply_chain' ? 'TYPER(S)' :
+                                         entry.typerMode === 'rogue' ? 'TYPER(R)' : 'TYPER'}
+                                      </span>
                                     </>
                                   )}
                                 </span>
@@ -4380,26 +4878,47 @@ export default function App() {
                   isSatelliteView={isSatelliteView}
                   infectedIds={infectedIds}
                   shieldedIds={shieldedIds}
+                  immuneCountryIds={immuneCountryIds}
                   supplyChainStartId={supplyChainStartId}
                   supplyChainEndId={supplyChainEndId}
                   supplyChainActiveId={supplyChainActiveId}
                   supplyChainPathIds={supplyChainPathIds}
                   supplyChainDecayIds={supplyChainDecayIds}
                   supplyChainChokeIds={supplyChainChokeIds}
+                  supplyChainOverlayMode={supplyChainOverlayMode}
                 />
               
                 {/* Interactive Overlays */}
                 {!isMemoryMode && (
                   <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-                    <div className="bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-3 rounded-lg flex items-center gap-4 shadow-xl">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-                        <span className="text-[10px] font-mono uppercase">Secured</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-sm bg-[#262626]" />
-                        <span className="text-[10px] font-mono uppercase">Unknown</span>
-                      </div>
+                    <div className="bg-[#121212]/90 backdrop-blur-sm border border-neutral-800 p-3 rounded-lg flex items-center flex-wrap gap-4 shadow-xl">
+                      {typerMode === 'rogue' ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-sm bg-red-500 animate-pulse" />
+                            <span className="text-[10px] font-mono uppercase">Infected</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-sm bg-[#06b6d4]" />
+                            <span className="text-[10px] font-mono uppercase">Firewall</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-sm bg-[#047857]" />
+                            <span className="text-[10px] font-mono uppercase">Immune</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+                            <span className="text-[10px] font-mono uppercase">Secured</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-sm bg-[#262626]" />
+                            <span className="text-[10px] font-mono uppercase">Unknown</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -4579,6 +5098,71 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Supply Chain Intercept Mode Path Comparison */}
+                  {gameType === 'typing' && typerMode === 'supply_chain' && (
+                    <div className="p-6 rounded-3xl bg-neutral-900 border border-neutral-800 space-y-4">
+                      <h4 className="text-sm font-black uppercase tracking-wider text-amber-500 flex items-center gap-2">
+                        <span>⛓ SUPPLY CHAIN ROUTE OPTIMIZATION BRIEFING</span>
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800 space-y-2">
+                          <div className="flex justify-between items-center text-xs font-mono">
+                            <span className="text-neutral-400 uppercase">YOUR INTERCEPT ROUTE</span>
+                            <span className="text-amber-400 font-bold">{supplyChainPathList.length > 1 ? supplyChainPathList.length - 1 : 0} STEPS</span>
+                          </div>
+                          <div className="text-sm font-black text-white flex flex-wrap gap-1.5 pt-1">
+                            {supplyChainPathList.map((id, idx) => {
+                              const c = COUNTRIES.find(curr => curr.id === id);
+                              if (!c) return null;
+                              return (
+                                <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800/80 text-[10px] font-mono border border-neutral-700">
+                                  {idx === 0 && <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" title="Start Point" />}
+                                  {idx === supplyChainPathList.length - 1 && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" title="End Point" />}
+                                  {idx > 0 && idx < supplyChainPathList.length - 1 && <span className="w-1.5 h-1.5 rounded-full bg-amber-400/40" />}
+                                  {c.name.toUpperCase()}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-neutral-950/60 border border-neutral-800 space-y-2">
+                          <div className="flex justify-between items-center text-xs font-mono">
+                            <span className="text-neutral-400 uppercase">THEORETICAL OPTIMAL ROUTE (SHORTEST)</span>
+                            {(() => {
+                              const actualStart = supplyChainPathList[0] || supplyChainStartId;
+                              const bestPath = actualStart && supplyChainEndId ? findSupplyChainPath(actualStart, supplyChainEndId, new Set()) : null;
+                              const steps = bestPath && bestPath.length > 1 ? bestPath.length - 1 : 0;
+                              return <span className="text-emerald-400 font-bold">{steps} STEPS</span>;
+                            })()}
+                          </div>
+                          <div className="text-sm font-black text-white flex flex-wrap gap-1.5 pt-1">
+                            {(() => {
+                              const actualStart = supplyChainPathList[0] || supplyChainStartId;
+                              const bestPath = actualStart && supplyChainEndId ? findSupplyChainPath(actualStart, supplyChainEndId, new Set()) : null;
+                              if (!bestPath) return <span className="text-neutral-600 text-[10px] uppercase font-mono">NO FEASIBLE PATH DETECTED</span>;
+                              return bestPath.map((id, idx) => {
+                                const c = COUNTRIES.find(curr => curr.id === id);
+                                if (!c) return null;
+                                return (
+                                  <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono">
+                                    {idx === 0 && <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" title="Start Point" />}
+                                    {idx === bestPath!.length - 1 && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" title="End Point" />}
+                                    {idx > 0 && idx < bestPath!.length - 1 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                                    {c.name.toUpperCase()}
+                                  </span>
+                                );
+                              });
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-mono text-center">
+                        🎯 Map Diagnostics: <span className="text-yellow-400 font-bold">[YELLOW]</span> Start point • <span className="text-blue-400 font-bold">[BLUE]</span> End point • <span className="text-emerald-400 font-bold">[GREEN]</span> Best possible route • <span className="text-amber-300 font-bold">[SOFTER YELLOW]</span> My extra detours (not in optimal shortest route)
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-black uppercase tracking-widest text-white/50 flex items-center gap-2">
@@ -4674,6 +5258,14 @@ export default function App() {
                                   isSatelliteView={isSatelliteView}
                                   isMemoryMode={false}
                                   isPaused={false}
+                                  gameType={gameType}
+                                  supplyChainStartId={supplyChainStartId}
+                                  supplyChainEndId={supplyChainEndId}
+                                  supplyChainActiveId={supplyChainActiveId}
+                                  supplyChainPathIds={supplyChainPathIds}
+                                  supplyChainDecayIds={supplyChainDecayIds}
+                                  supplyChainChokeIds={supplyChainChokeIds}
+                                  supplyChainOverlayMode={supplyChainOverlayMode}
                                 />
                               </div>
                           </div>
@@ -5284,6 +5876,16 @@ export default function App() {
                       highlightedAllianceMemberIds={highlightedAllianceMemberIds}
                       plotContinentsColorMode={plotContinentsColorMode}
                       isSatelliteView={isSatelliteView}
+                      gameType={viewingRecord.gameType}
+                      infectedIds={new Set(viewingRecord.infectedIds || [])}
+                      shieldedIds={new Set(viewingRecord.shieldedIds || [])}
+                      immuneCountryIds={new Set(viewingRecord.immuneCountryIds || [])}
+                      supplyChainStartId={viewingRecord.supplyChainStartId || (viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'supply_chain' ? supplyChainStartId : null)}
+                      supplyChainEndId={viewingRecord.supplyChainEndId || (viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'supply_chain' ? supplyChainEndId : null)}
+                      supplyChainPathIds={viewingRecord.supplyChainPathList ? new Set(viewingRecord.supplyChainPathList) : (viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'supply_chain' ? supplyChainPathIds : new Set())}
+                      supplyChainDecayIds={viewingRecord.supplyChainDecayIds ? new Set(viewingRecord.supplyChainDecayIds) : (viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'supply_chain' ? supplyChainDecayIds : new Set())}
+                      supplyChainChokeIds={viewingRecord.supplyChainChokeIds ? new Set(viewingRecord.supplyChainChokeIds) : (viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'supply_chain' ? supplyChainChokeIds : new Set())}
+                      supplyChainOverlayMode={supplyChainOverlayMode}
                     />
 
                     {/* Centered Bottom Search Bar */}
@@ -5481,7 +6083,10 @@ export default function App() {
                             <div className="flex justify-between items-center py-1 border-b border-neutral-900">
                               <span className="text-neutral-500 uppercase text-[9px] font-bold">GAME MODE:</span>
                               <span className="text-cyan-400 font-bold uppercase text-[10px]">
-                                {viewingRecord.gameType === 'typing' ? 'Typer' : 
+                                {viewingRecord.gameType === 'typing' ? (
+                                  viewingRecord.typerMode === 'supply_chain' ? 'TYPER(S)' :
+                                  viewingRecord.typerMode === 'rogue' ? 'TYPER(R)' : 'TYPER'
+                                ) : 
                                  viewingRecord.gameType === 'flag' ? 'Guess Flag' : 
                                  viewingRecord.gameType === 'highlight' ? 'Guess Country' : 'Surveillance'}
                               </span>
@@ -5927,6 +6532,65 @@ export default function App() {
                                       </div>
                                     </div>
 
+                                    {/* Rogue State Outbreak Intel Card */}
+                                    {viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'rogue' && (() => {
+                                      const saveCount = (viewingRecord.countrySaveCounts && viewingRecord.countrySaveCounts[country.id]) || 0;
+                                      const difficulty = viewingRecord.supplyDifficulty || 3;
+                                      const reqSaves = 6 - difficulty;
+                                      const isImm = (viewingRecord.immuneCountryIds && (
+                                        Array.isArray(viewingRecord.immuneCountryIds)
+                                          ? viewingRecord.immuneCountryIds.includes(country.id)
+                                          : (viewingRecord.immuneCountryIds instanceof Set
+                                              ? (viewingRecord.immuneCountryIds as Set<string>).has(country.id)
+                                              : false)
+                                      )) || (immuneCountryIdsRef.current && immuneCountryIdsRef.current.has(country.id));
+                                      
+                                      const isInf = infectedIds.size > 0 
+                                        ? infectedIds.has(country.id)
+                                        : (viewingRecord.guessedIds && !viewingRecord.guessedIds.includes(country.id));
+                                      const isShield = shieldedIds.has(country.id);
+
+                                      return (
+                                        <div className="p-3 bg-red-950/25 border border-red-500/30 rounded-xl space-y-2.5 font-mono text-left">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5">
+                                              <Flame className="w-3 h-3 animate-pulse text-red-500" /> OUTBREAK THREAT DOSSIER
+                                            </span>
+                                            <span className={cn(
+                                              "text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase border",
+                                              isImm ? "bg-emerald-950/60 text-emerald-400 border-emerald-500/40" :
+                                              isShield ? "bg-cyan-950/60 text-cyan-400 border-cyan-500/40" :
+                                              isInf ? "bg-red-950/60 text-red-400 border-red-500/40 animate-pulse" :
+                                              "bg-neutral-900 text-neutral-400 border-neutral-800"
+                                            )}>
+                                              {isImm ? "🛡️ IMMUNE ZONE" :
+                                               isShield ? "🛡️ FIREWALL ACTIVE" :
+                                               isInf ? "☣️ INFECTED SECTOR" : 
+                                               "STABLE SECTOR"}
+                                            </span>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                            <div className="bg-neutral-950/40 p-1.5 rounded border border-neutral-800/60 text-left">
+                                              <span className="text-[7.5px] text-neutral-500 uppercase block leading-none">SECTOR HEALS DESIG</span>
+                                              <span className="font-bold text-white leading-none mt-1 block">{saveCount} / {reqSaves} SAVES</span>
+                                            </div>
+                                            <div className="bg-neutral-950/40 p-1.5 rounded border border-neutral-800/60 text-left">
+                                              <span className="text-[7.5px] text-neutral-500 uppercase block leading-none">IMMUNIZATION LEVEL</span>
+                                              <span className={cn("font-bold leading-none mt-1 block", isImm ? "text-emerald-400" : "text-amber-400")}>
+                                                {isImm ? "100% (SECURED)" : `${Math.min(100, Math.round((saveCount / reqSaves) * 100))}%`}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <div className="w-full bg-neutral-900 h-1.5 rounded-full overflow-hidden font-sans">
+                                            <div 
+                                              className={cn("h-full rounded-full transition-all duration-300", isImm ? "bg-emerald-500" : "bg-red-500")}
+                                              style={{ width: `${Math.min(100, (saveCount / reqSaves) * 100)}%` }}
+                                            />
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+
                                     {/* Telemetry Fact Grid */}
                                     <div className="grid grid-cols-2 gap-2 pt-4 border-t border-white/5 font-mono">
                                       <a
@@ -6079,6 +6743,66 @@ export default function App() {
                                       </div>
                                     </div>
                                   </div>
+
+                                  {/* Rogue State Outbreak Intel Card (Expanded inline view) */}
+                                  {viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'rogue' && (() => {
+                                    const saveCount = (viewingRecord.countrySaveCounts && viewingRecord.countrySaveCounts[country.id]) || 0;
+                                    const difficulty = viewingRecord.supplyDifficulty || 3;
+                                    const reqSaves = 6 - difficulty;
+                                    const isImm = (viewingRecord.immuneCountryIds && (
+                                      Array.isArray(viewingRecord.immuneCountryIds)
+                                        ? viewingRecord.immuneCountryIds.includes(country.id)
+                                        : (viewingRecord.immuneCountryIds instanceof Set
+                                            ? (viewingRecord.immuneCountryIds as Set<string>).has(country.id)
+                                            : false)
+                                    )) || (immuneCountryIdsRef.current && immuneCountryIdsRef.current.has(country.id));
+                                    
+                                    const isInf = infectedIds.size > 0 
+                                      ? infectedIds.has(country.id)
+                                      : (viewingRecord.guessedIds && !viewingRecord.guessedIds.includes(country.id));
+                                    const isShield = shieldedIds.has(country.id);
+
+                                    return (
+                                      <div className="p-3 bg-red-950/20 border border-red-500/30 rounded-xl space-y-2.5 font-mono text-left max-w-xl">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[9px] font-black text-red-500 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Flame className="w-3 h-3 animate-pulse text-red-500" /> OUTBREAK THREAT DOSSIER
+                                          </span>
+                                          <span className={cn(
+                                            "text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase border",
+                                            isImm ? "bg-emerald-950/60 text-emerald-400 border-emerald-500/40" :
+                                            isShield ? "bg-cyan-950/60 text-cyan-400 border-cyan-500/40" :
+                                            isInf ? "bg-red-950/60 text-red-400 border-red-500/40 animate-pulse" :
+                                            "bg-neutral-900 text-neutral-400 border-neutral-800"
+                                          )}>
+                                            {isImm ? "🛡️ IMMUNE ZONE" :
+                                             isShield ? "🛡️ FIREWALL ACTIVE" :
+                                             isInf ? "☣️ INFECTED SECTOR" : 
+                                             "STABLE SECTOR"}
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                          <div className="bg-neutral-950/40 p-1.5 rounded border border-neutral-800/60 flex justify-between items-center text-left">
+                                            <span className="text-[7.5px] text-neutral-500 uppercase">SECTOR HEALS DESIG</span>
+                                            <span className="font-bold text-white font-mono">{saveCount} / {reqSaves} SAVES</span>
+                                          </div>
+                                          <div className="bg-neutral-950/40 p-1.5 rounded border border-neutral-800/60 flex justify-between items-center text-left">
+                                            <span className="text-[7.5px] text-neutral-500 uppercase">IMMUNITY VALUE</span>
+                                            <span className={cn("font-bold font-mono", isImm ? "text-emerald-400" : "text-amber-400")}>
+                                              {isImm ? "100% (SECURED)" : `${Math.round((saveCount/reqSaves)*100)}%`}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="w-full bg-neutral-900 h-1 rounded-full overflow-hidden font-sans">
+                                          <div 
+                                            className={cn("h-full rounded-full transition-all duration-300", isImm ? "bg-emerald-500" : "bg-red-500")}
+                                            style={{ width: `${Math.min(100, (saveCount/reqSaves)*100)}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
                                   <div className="grid grid-cols-4 gap-4">
                                     <a
                                       href={country.capital ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(country.capital + ", " + country.name)}` : undefined}
@@ -6239,7 +6963,10 @@ export default function App() {
                   className="flex flex-col gap-4 shrink-0 overflow-hidden"
                 >
                   {/* Tab Selector */}
-                  <div className="grid grid-cols-3 p-1 bg-neutral-900/60 border border-neutral-800 rounded-xl shrink-0 font-mono">
+                  <div className={cn(
+                    "grid p-1 bg-neutral-900/60 border border-neutral-800 rounded-xl shrink-0 font-mono",
+                    (viewingRecord?.gameType === 'typing' && (viewingRecord?.typerMode === 'rogue' || viewingRecord?.typerMode === 'supply_chain')) ? "grid-cols-4" : "grid-cols-3"
+                  )}>
                     <button
                       onClick={() => {
                         setIsContinentPanelCollapsed(false);
@@ -6250,7 +6977,7 @@ export default function App() {
                         }
                       }}
                       className={cn(
-                        "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all",
+                        "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all text-center",
                         expansionPanelTab === 'countries'
                           ? "bg-emerald-500 text-black shadow-md font-bold"
                           : "text-neutral-400 hover:text-white"
@@ -6283,6 +7010,34 @@ export default function App() {
                       <Zap className="w-3 h-3" />
                       Resources
                     </button>
+                    {viewingRecord?.gameType === 'typing' && viewingRecord?.typerMode === 'rogue' && (
+                      <button
+                        onClick={() => setExpansionPanelTab('rogue')}
+                        className={cn(
+                          "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5",
+                          expansionPanelTab === 'rogue'
+                            ? "bg-red-500 text-black shadow-md font-bold"
+                            : "text-red-400 hover:text-red-300"
+                        )}
+                      >
+                        <Shield className="w-3 h-3" />
+                        Rogue Intel
+                      </button>
+                    )}
+                    {viewingRecord?.gameType === 'typing' && viewingRecord?.typerMode === 'supply_chain' && (
+                      <button
+                        onClick={() => setExpansionPanelTab('supply_route')}
+                        className={cn(
+                          "py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5",
+                          expansionPanelTab === 'supply_route'
+                            ? "bg-amber-500 text-black shadow-md font-bold animate-pulse"
+                            : "text-amber-400 hover:text-amber-300"
+                        )}
+                      >
+                        <Target className="w-3 h-3" />
+                        Supply Route
+                      </button>
+                    )}
                   </div>
 
                   {expansionPanelTab === 'countries' && (
@@ -6433,17 +7188,48 @@ export default function App() {
                               .map(country => {
                                 const id = country.id;
                                 const isSelected = selectedExpandedCountryId === id;
+
+                                const isRogue = viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'rogue';
+                                const isInfected = isRogue && viewingRecord.infectedIds?.includes(id);
+                                const isShielded = isRogue && viewingRecord.shieldedIds?.includes(id);
+                                const isImmune = isRogue && viewingRecord.immuneCountryIds?.includes(id);
+
+                                let customClass = isSelected 
+                                  ? "bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                                  : "bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:text-emerald-400";
+
+                                if (isRogue) {
+                                  if (isInfected) {
+                                    customClass = isSelected
+                                      ? "bg-red-500/25 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.25)]"
+                                      : "bg-red-950/20 border-red-950/50 text-red-400/80 hover:text-red-400 hover:border-red-500/40";
+                                  } else if (isShielded) {
+                                    customClass = isSelected
+                                      ? "bg-cyan-500/25 border-cyan-400 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)]"
+                                      : "bg-cyan-950/20 border-cyan-950/50 text-cyan-400/80 hover:text-cyan-400 hover:border-cyan-500/40";
+                                  } else if (isImmune) {
+                                    customClass = isSelected
+                                      ? "bg-emerald-500/25 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
+                                      : "bg-emerald-950/20 border-emerald-950/50 text-emerald-400/80 hover:text-emerald-400 hover:border-emerald-500/40";
+                                  }
+                                }
+
                                 return (
                                   <button 
                                     key={id} 
                                     onClick={() => setSelectedExpandedCountryId(isSelected ? null : id)}
                                     className={cn(
                                       "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
-                                      isSelected ? "bg-emerald-500/20 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:text-emerald-400"
+                                      customClass
                                     )}
                                   >
                                     <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10 shrink-0" alt="" />
-                                    <span className="flex-1 text-left truncate font-bold">{country.name}</span>
+                                    <span className="flex-grow text-left truncate font-bold flex items-center gap-2">
+                                      {isRogue && isInfected && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" title="Infected" />}
+                                      {isRogue && isShielded && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" title="Firewall" />}
+                                      {isRogue && isImmune && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" title="Immune" />}
+                                      {country.name}
+                                    </span>
                                     <span className="text-[8px] opacity-40 shrink-0">${Math.floor((country.gdp || 0)/1000).toLocaleString()}B</span>
                                   </button>
                                 );
@@ -6495,17 +7281,49 @@ export default function App() {
                             })
                             .map(country => {
                               const isSelected = selectedExpandedCountryId === country.id;
+                              const id = country.id;
+
+                              const isRogue = viewingRecord.gameType === 'typing' && viewingRecord.typerMode === 'rogue';
+                              const isInfected = isRogue && viewingRecord.infectedIds?.includes(id);
+                              const isShielded = isRogue && viewingRecord.shieldedIds?.includes(id);
+                              const isImmune = isRogue && viewingRecord.immuneCountryIds?.includes(id);
+
+                              let customClass = isSelected 
+                                ? "bg-red-500/20 border-red-400 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
+                                : "bg-neutral-900/50 border-neutral-800/50 text-neutral-500 hover:text-red-400";
+
+                              if (isRogue) {
+                                if (isInfected) {
+                                  customClass = isSelected
+                                    ? "bg-red-500/25 border-red-500 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.25)]"
+                                    : "bg-red-950/20 border-red-950/50 text-red-400/80 hover:text-red-400 hover:border-red-500/40";
+                                } else if (isShielded) {
+                                  customClass = isSelected
+                                    ? "bg-cyan-500/25 border-cyan-400 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)]"
+                                    : "bg-cyan-950/20 border-cyan-950/50 text-cyan-400/80 hover:text-cyan-400 hover:border-cyan-500/40";
+                                } else if (isImmune) {
+                                  customClass = isSelected
+                                    ? "bg-emerald-500/25 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
+                                    : "bg-emerald-950/20 border-emerald-950/50 text-emerald-400/80 hover:text-emerald-400 hover:border-emerald-500/40";
+                                }
+                              }
+
                               return (
                                 <button 
                                   key={country.id} 
                                   onClick={() => setSelectedExpandedCountryId(isSelected ? null : country.id)}
                                   className={cn(
                                     "w-full flex items-center gap-3 p-2.5 rounded-xl border text-[10px] font-mono group transition-all",
-                                    isSelected ? "bg-red-500/20 border-red-400 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "bg-neutral-900/50 border-neutral-800/50 text-neutral-500 hover:text-red-400"
+                                    customClass
                                   )}
                                 >
                                   <img src={`https://flagcdn.com/w20/${country.code.toLowerCase()}.png`} className="w-5 h-3.5 rounded-sm object-cover border border-white/10 opacity-60 shrink-0" alt="" />
-                                  <span className="flex-1 text-left truncate font-bold">{country.name}</span>
+                                  <span className="flex-grow text-left truncate font-bold flex items-center gap-2">
+                                    {isRogue && isInfected && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" title="Infected" />}
+                                    {isRogue && isShielded && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" title="Firewall" />}
+                                    {isRogue && isImmune && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" title="Immune" />}
+                                    {country.name}
+                                  </span>
                                   <span className="text-[8px] opacity-40 shrink-0">${Math.floor(country.gdp/1000).toLocaleString()}B</span>
                                 </button>
                               );
@@ -6909,6 +7727,363 @@ export default function App() {
                       </div>
                     );
                   })()}
+
+                  {expansionPanelTab === 'rogue' && (() => {
+                    const countrySaveCounts = viewingRecord?.countrySaveCounts || {};
+                    const immuneCountryIds = viewingRecord?.immuneCountryIds || [];
+                    const infectedIds = viewingRecord?.infectedIds || [];
+                    const shieldedIds = viewingRecord?.shieldedIds || [];
+                    const difficulty = viewingRecord?.supplyDifficulty || 3;
+                    const reqSaves = 6 - difficulty;
+
+                    // Calculate high-level metrics for containment progress
+                    const savedCountriesList = Object.keys(countrySaveCounts).filter(cid => (countrySaveCounts as Record<string, number>)[cid] > 0);
+                    const totalSavesPerformed = (Object.values(countrySaveCounts) as number[]).reduce((sum, count) => sum + count, 0);
+                    const immuneCount = immuneCountryIds.length;
+                    const activeInfectedCount = infectedIds.length;
+                    const activeShieldedCount = shieldedIds.length;
+
+                    // Group save statistics by Continent
+                    const continentStats: Record<string, { totalSaves: number, totalImmune: number, totalStable: number }> = {};
+                    COUNTRIES.forEach(c => {
+                      if (!continentStats[c.continent]) {
+                        continentStats[c.continent] = { totalSaves: 0, totalImmune: 0, totalStable: 0 };
+                      }
+                      const saves = countrySaveCounts[c.id] || 0;
+                      const isImmune = immuneCountryIds.includes(c.id);
+                      const isInfected = infectedIds.includes(c.id);
+
+                      continentStats[c.continent].totalSaves += saves;
+                      if (isImmune) {
+                        continentStats[c.continent].totalImmune += 1;
+                      }
+                      if (!isInfected && !isImmune) {
+                        continentStats[c.continent].totalStable += 1;
+                      }
+                    });
+
+                    // List top shielded or saved hot-spots
+                    const hotspotCountries = COUNTRIES
+                      .map(c => ({
+                        name: c.name,
+                        code: c.code,
+                        id: c.id,
+                        saves: countrySaveCounts[c.id] || 0,
+                        isImmune: immuneCountryIds.includes(c.id),
+                        isInfected: infectedIds.includes(c.id),
+                        isShielded: shieldedIds.includes(c.id)
+                      }))
+                      .filter(hc => hc.saves > 0 || hc.isImmune || hc.isShielded || hc.isInfected)
+                      .sort((a, b) => b.saves - a.saves)
+                      .slice(0, 15);
+
+                    return (
+                      <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0">
+                        {/* Tab header */}
+                        <div className="p-4 bg-red-950/15 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+                          <span className="text-[10px] font-black uppercase text-red-500 tracking-widest flex items-center gap-2">
+                            <Flame className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                            ROGUE CONTAINMENT INTEL PANEL
+                          </span>
+                        </div>
+
+                        {/* Contents */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-left font-mono">
+                          {/* Main Stats Aggregators */}
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">Containment Tier</span>
+                              <span className="text-xs font-black text-rose-400 block uppercase">Difficulty Lvl {difficulty}</span>
+                              <span className="text-[7.5px] text-neutral-400 font-bold uppercase mt-1.5 block">
+                                requires {reqSaves} saves to immunize
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">Total Interventions</span>
+                              <span className="text-xs font-black text-emerald-400 block font-mono">{totalSavesPerformed} Saves</span>
+                              <span className="text-[7.5px] text-neutral-400 font-bold uppercase mt-1.5 block">
+                                across {savedCountriesList.length} unique sectors
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">Immune Sectors</span>
+                              <span className="text-xs font-black text-cyan-400 block font-mono">{immuneCount} immune</span>
+                              <span className="text-[7.5px] text-neutral-500 uppercase tracking-wider mt-1.5 block font-bold">
+                                {((immuneCount / COUNTRIES.length) * 100).toFixed(0)}% sector immunity
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">Fires & Active Threats</span>
+                              <span className="text-xs font-black text-red-400 block font-mono">{activeInfectedCount} infected</span>
+                              <span className="text-[7.5px] text-neutral-500 uppercase tracking-wider mt-1.5 block font-bold">
+                                {activeShieldedCount} active firewalls
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Continent Outbreak Breakdown */}
+                          <div className="space-y-2 border-t border-neutral-800/60 pt-3">
+                            <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest pl-1 block">Continent Epidemic Vectors</span>
+                            <div className="grid grid-cols-1 gap-2">
+                              {Object.entries(continentStats).map(([contName, cst]) => {
+                                const totalContSectors = COUNTRIES.filter(c => c.continent === contName).length;
+                                const immPercent = (cst.totalImmune / totalContSectors) * 100;
+                                return (
+                                  <div key={contName} className="p-3 bg-[#151518]/30 border border-neutral-900 rounded-2xl space-y-1.5 text-[9px]">
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-white font-bold uppercase">{contName}</span>
+                                      <span className="text-neutral-500">{cst.totalSaves} Total Saves</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-[8px] text-neutral-400">
+                                      <span>Immune: {cst.totalImmune} / {totalContSectors}</span>
+                                      <span className="text-right">Stable: {cst.totalStable} / {totalContSectors}</span>
+                                    </div>
+                                    <div className="w-full bg-neutral-900/60 h-1 rounded-full overflow-hidden">
+                                      <div 
+                                        className="h-full bg-cyan-500 transition-all duration-300"
+                                        style={{ width: `${immPercent}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Rogue Hotspots & Sector Dossiers */}
+                          <div className="space-y-2 border-t border-neutral-800/60 pt-3">
+                            <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest pl-1 block">Sector Incident Logs</span>
+                            <div className="space-y-1.5">
+                              {hotspotCountries.length === 0 ? (
+                                <div className="text-center py-4 text-xs italic text-neutral-500">
+                                  No incident records logged for this session.
+                                </div>
+                              ) : (
+                                hotspotCountries.map((hc) => (
+                                  <button
+                                    key={hc.id}
+                                    onClick={() => setSelectedExpandedCountryId(hc.id)}
+                                    className={cn(
+                                      "w-full flex items-center justify-between p-2 rounded-xl border text-[9px] transition-all hover:bg-neutral-900 border-neutral-900/60 text-left",
+                                      selectedExpandedCountryId === hc.id ? "bg-red-500/10 border-red-500/30" : "bg-neutral-950/20"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2 truncate">
+                                      {hc.code && (
+                                        <img 
+                                          src={`https://flagcdn.com/w20/${hc.code.toLowerCase()}.png`} 
+                                          className="w-4 h-3 rounded-sm object-cover border border-white/5 shrink-0" 
+                                          alt="" 
+                                        />
+                                      )}
+                                      <span className="text-neutral-300 font-bold truncate uppercase">{hc.name}</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {hc.isImmune ? (
+                                        <span className="text-[7.5px] font-black bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded uppercase font-bold">Immune</span>
+                                      ) : hc.isShielded ? (
+                                        <span className="text-[7.5px] font-black bg-cyan-950/40 text-cyan-400 border border-cyan-500/20 px-1 py-0.5 rounded uppercase font-bold">Firewalled</span>
+                                      ) : hc.isInfected ? (
+                                        <span className="text-[7.5px] font-black bg-red-950/40 text-red-400 border border-red-500/20 px-1 py-0.5 rounded uppercase font-bold animate-pulse">Infected</span>
+                                      ) : null}
+                                      <span className="text-neutral-500 font-bold">{hc.saves} Saves</span>
+                                    </div>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {expansionPanelTab === 'supply_route' && (() => {
+                    const start = viewingRecord.supplyChainStartId || supplyChainStartId;
+                    const end = viewingRecord.supplyChainEndId || supplyChainEndId;
+                    const startCountry = COUNTRIES.find(c => c.id === start);
+                    const endCountry = COUNTRIES.find(c => c.id === end);
+
+                    const userPath = viewingRecord.supplyChainPathList || [];
+                    const chokes = viewingRecord.supplyChainChokeIds || [];
+                    const decays = viewingRecord.supplyChainDecayIds || [];
+                    const difficultyLvl = viewingRecord.supplyDifficulty || 2;
+                    const config = SUPPLY_CHAIN_L_CONFIGS[difficultyLvl] || SUPPLY_CHAIN_L_CONFIGS[2];
+
+                    const actualStart = userPath[0] || start;
+                    const bestPath = actualStart && end ? findSupplyChainPath(actualStart, end, new Set()) : null;
+
+                    return (
+                      <div className="flex-1 flex flex-col border border-neutral-800 rounded-3xl overflow-hidden bg-[#121212]/30 min-h-0 animate-fade-in text-left">
+                        {/* Tab header */}
+                        <div className="p-4 bg-amber-950/15 border-b border-neutral-800 flex items-center justify-between sticky top-0 z-10 backdrop-blur-sm">
+                          <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest flex items-center gap-2">
+                            <Target className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                            SUPPLY INTERCEPT DETAILED LOGS
+                          </span>
+                        </div>
+
+                        {/* Contents */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-left font-mono">
+                          
+                          {/* Overview Stats Aggregators */}
+                          <div className="grid grid-cols-2 gap-2.5">
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">Routing Tier</span>
+                              <span className="text-xs font-black text-amber-400 block uppercase">Level {difficultyLvl} • {config.badge}</span>
+                              <span className="text-[7.5px] text-neutral-400 font-bold uppercase mt-1 block">
+                                Decay every {(config.decayInterval / 1000).toFixed(1)}s
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">Score Multiplier</span>
+                              <span className="text-xs font-black text-emerald-400 block font-mono">x{config.scoreMultiplier.toFixed(1)} XP</span>
+                              <span className="text-[7.5px] text-neutral-400 font-bold uppercase mt-1 block">
+                                Max concurrent chokes: {config.maxChokes}
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">User Hop Route</span>
+                              <span className="text-xs font-black text-cyan-400 block font-mono">{userPath.length} Steps</span>
+                              <span className="text-[7.5px] text-neutral-400 font-bold uppercase mt-1 block">
+                                Connected {userPath.length > 0 ? "safely" : "with decay"}
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block mb-1">Fastest Possible Path</span>
+                              <span className="text-xs font-black text-green-400 block font-mono">{bestPath ? bestPath.length : 0} Steps</span>
+                              <span className="text-[7.5px] text-neutral-400 font-bold uppercase mt-1 block">
+                                Optimal path solution
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Map Visualization Toggler */}
+                          <div className="p-3 bg-neutral-900/40 border border-neutral-800 rounded-2xl space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[8px] text-neutral-500 uppercase tracking-widest block font-bold text-left">ROUTE VISUAL OVERLAY</span>
+                              <span className="text-[7px] text-neutral-400 font-mono font-bold bg-neutral-950 px-1 py-0.5 rounded border border-neutral-800 uppercase animate-pulse">
+                                Toggle map render
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => setSupplyChainOverlayMode('user')}
+                                className={cn(
+                                  "py-2 px-1.5 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-1 cursor-pointer",
+                                  supplyChainOverlayMode === 'user'
+                                    ? "bg-amber-500/10 border-amber-500/60 text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                                    : "bg-neutral-950/40 border-neutral-900 text-neutral-500 hover:text-white hover:border-neutral-800"
+                                )}
+                              >
+                                <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                                My Route ({userPath.length} steps)
+                              </button>
+                              <button
+                                onClick={() => setSupplyChainOverlayMode('optimal')}
+                                className={cn(
+                                  "py-2 px-1.5 rounded-xl border text-[9px] font-black uppercase transition-all flex flex-col items-center gap-1 cursor-pointer",
+                                  supplyChainOverlayMode === 'optimal'
+                                    ? "bg-green-500/10 border-green-500/60 text-green-400 shadow-[0_0_10px_rgba(34,197,94,0.1)]"
+                                    : "bg-neutral-950/40 border-neutral-900 text-neutral-500 hover:text-white hover:border-neutral-800"
+                                )}
+                              >
+                                <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                                Optimal Route ({bestPath ? bestPath.length : 0} steps)
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Waypoint terminals list */}
+                          <div className="space-y-3">
+                            <div className="text-[8px] font-black text-neutral-500 uppercase tracking-widest pl-1 header-aligned text-left">Route Terminal Stations</div>
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Starting station */}
+                              {startCountry && (
+                                <div className="p-2 bg-neutral-900/60 border border-neutral-800 rounded-xl space-y-1">
+                                  <span className="text-[7px] text-neutral-500 uppercase block font-black">Supply Depot [START]</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <img 
+                                      src={`https://flagcdn.com/w20/${startCountry.code.toLowerCase()}.png`} 
+                                      className="w-4 h-3 rounded-sm object-cover border border-white/5 shrink-0" 
+                                      alt="" 
+                                    />
+                                    <span className="text-[9px] font-bold text-white uppercase truncate">{startCountry.name}</span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Ending station */}
+                              {endCountry && (
+                                <div className="p-2 bg-neutral-900/60 border border-neutral-800 rounded-xl space-y-1">
+                                  <span className="text-[7px] text-cyan-400 uppercase block font-black font-mono">Receiver Hub [END]</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <img 
+                                      src={`https://flagcdn.com/w20/${endCountry.code.toLowerCase()}.png`} 
+                                      className="w-4 h-3 rounded-sm object-cover border border-white/5 shrink-0" 
+                                      alt="" 
+                                    />
+                                    <span className="text-[9px] font-bold text-cyan-400 uppercase truncate">{endCountry.name}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Detail Route List Timeline */}
+                          <div className="space-y-2 border-t border-neutral-800/60 pt-3">
+                            <span className="text-[8px] font-black text-neutral-500 uppercase tracking-widest pl-1 block text-left">
+                              {supplyChainOverlayMode === 'optimal' ? "Optimal Waypoint Timeline" : "Your Intercept Timeline"}
+                            </span>
+                            <div className="space-y-1.5 pl-1.5 relative border-l border-neutral-800/80 ml-2">
+                              {(() => {
+                                const activePathList = supplyChainOverlayMode === 'optimal' ? bestPath : userPath;
+                                if (!activePathList || activePathList.length === 0) {
+                                  return (
+                                    <div className="text-center py-4 text-xs italic text-neutral-500">
+                                      No route data available for this timeline.
+                                    </div>
+                                  );
+                                }
+                                return activePathList.map((countryId, index) => {
+                                  const c = COUNTRIES.find(curr => curr.id === countryId);
+                                  if (!c) return null;
+                                  return (
+                                    <div key={countryId + '-' + index} className="flex items-center gap-2.5 text-[9px] relative pl-4 py-0.5 group">
+                                      <div className={cn(
+                                        "absolute left-[-5px] top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border bg-neutral-950 transition-all group-hover:scale-125",
+                                        supplyChainOverlayMode === 'optimal' ? "border-green-500" : "border-amber-400"
+                                      )} />
+                                      {c.code && (
+                                        <img 
+                                          src={`https://flagcdn.com/w20/${c.code.toLowerCase()}.png`} 
+                                          className="w-4 h-3 rounded-sm object-cover border border-white/5 shrink-0" 
+                                          alt="" 
+                                        />
+                                      )}
+                                      <div className="truncate flex-1">
+                                        <span className="text-neutral-300 font-bold truncate uppercase">{c.name}</span>
+                                        <span className="text-[7.5px] text-neutral-500 font-mono ml-2 font-black">HOP {index + 1}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </motion.div>
 
 
@@ -7140,7 +8315,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {[5, 10, 20, 50, 100, 195].map((q) => {
+                {[5, 10, 20, 50, 100, 199].map((q) => {
                   let badge = "TACTICAL";
                   let color = "hover:border-rose-500/40 hover:bg-rose-500/5 text-rose-400";
                   if (q === 5) { badge = "SABER"; color = "hover:border-emerald-500/40 hover:bg-emerald-500/5 text-emerald-400"; }
@@ -7148,7 +8323,7 @@ export default function App() {
                   else if (q === 20) { badge = "ADVANCED"; color = "hover:border-blue-500/40 hover:bg-blue-500/5 text-blue-400"; }
                   else if (q === 50) { badge = "INTENSE"; color = "hover:border-purple-500/40 hover:bg-purple-500/5 text-purple-400"; }
                   else if (q === 100) { badge = "HARDCORE"; color = "hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-400"; }
-                  else if (q === 195) { badge = "ALL GLOBE"; color = "hover:border-rose-500/40 hover:bg-rose-500/5 text-rose-500"; }
+                  else if (q === 199) { badge = "ALL GLOBE"; color = "hover:border-rose-500/40 hover:bg-rose-500/5 text-rose-500"; }
 
                   return (
                     <button
@@ -7213,7 +8388,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {[5, 10, 20, 50, 100, 195].map((q) => {
+                {[5, 10, 20, 50, 100, 199].map((q) => {
                   let badge = "TACTICAL";
                   let color = "hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-400";
                   if (q === 5) { badge = "SABER"; color = "hover:border-emerald-500/40 hover:bg-emerald-500/5 text-emerald-400"; }
@@ -7221,7 +8396,7 @@ export default function App() {
                   else if (q === 20) { badge = "ADVANCED"; color = "hover:border-blue-500/40 hover:bg-blue-500/5 text-blue-400"; }
                   else if (q === 50) { badge = "INTENSE"; color = "hover:border-purple-500/40 hover:bg-purple-500/5 text-purple-400"; }
                   else if (q === 100) { badge = "HARDCORE"; color = "hover:border-rose-500/40 hover:bg-rose-500/5 text-rose-400"; }
-                  else if (q === 195) { badge = "ALL GLOBE"; color = "hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-500"; }
+                  else if (q === 199) { badge = "ALL GLOBE"; color = "hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-500"; }
 
                   return (
                     <button
@@ -7233,7 +8408,7 @@ export default function App() {
                         startGame(selectedDuration, 'highlight', q);
                       }}
                       className={cn(
-                        "p-4 bg-neutral-900 border border-neutral-800 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.98] group",
+                        "p-4 bg-neutral-900 border border-neutral-805 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.98] group",
                         color
                       )}
                     >

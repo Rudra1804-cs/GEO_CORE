@@ -184,14 +184,159 @@ export function getSymmetricBordersMap(): Record<string, string[]> {
   return result;
 }
 
+let LAND_ONLY_BORDERS_MAP: Record<string, string[]> | null = null;
+
+export function getLandOnlyBordersMap(): Record<string, string[]> {
+  if (LAND_ONLY_BORDERS_MAP) {
+    return LAND_ONLY_BORDERS_MAP;
+  }
+
+  const map: Record<string, Set<string>> = {};
+
+  // Initialize for all countries
+  for (const c of COUNTRIES) {
+    map[c.id] = new Set<string>();
+  }
+
+  // Precomputed or manual connections we want to strictly filter out as maritime jumps
+  const maritimePairs = new Set<string>([
+    // UK ("826")
+    "826-250", "250-826", // France
+    "826-056", "056-826", // Belgium
+    "826-528", "528-826", // Netherlands
+    "826-352", "352-826", // Iceland
+    "826-578", "578-826", // Norway
+    
+    // Canada / Greenland / Denmark
+    "124-208", "208-124", // Canada - Denmark
+    "208-352", "352-208", // Denmark - Iceland
+    "208-578", "578-208", // Denmark - Norway
+    "208-752", "752-208", // Denmark - Sweden
+    
+    // Iceland ("352")
+    "352-578", "578-352", // Norway
+    "352-372", "372-352", // Ireland
+    
+    // Spain ("724") / France / Italy / Greece / Egypt
+    "724-012", "012-724", // Spain - Algeria
+    "250-208", "208-250", // France - Denmark
+    "380-300", "300-380", // Italy - Greece
+    "818-300", "300-818", // Egypt - Greece
+    "818-682", "682-818", // Egypt - Saudi Arabia
+    "710-646", "646-710", // South Africa - Rwanda
+    "643-792", "792-643", // Russia - Turkey
+    "643-752", "752-643", // Russia - Sweden
+
+    // Australia ("036")
+    "036-554", "554-036", // NZ
+    "036-360", "360-036", // Indonesia
+    "036-598", "598-036", // PNG
+    "036-702", "702-036", // Singapore
+
+    // Japan ("392")
+    "392-410", "410-392", // South Korea
+    "392-408", "408-392", // North Korea
+    "392-156", "156-392", // China
+    "392-643", "643-392", // Russia
+    "392-608", "608-392", // Philippines
+    "392-158", "158-392", // Taiwan
+
+    // Sri Lanka ("144")
+    "144-356", "356-144", // India
+    "144-462", "462-144", // Maldives
+
+    // Madagascar ("450")
+    "450-508", "508-450", // Mozambique
+    "450-710", "710-450", // South Africa
+    "450-480", "480-450", // Mauritius
+    "450-690", "690-450", // Seychelles
+    "450-174", "174-450", // Comoros
+
+    // Philippines ("608")
+    "608-158", "158-608", // Taiwan
+    "608-458", "458-608", // Malaysia
+    "608-360", "360-608", // Indonesia
+    "608-704", "704-608", // Vietnam
+
+    // Cuba ("192")
+    "192-840", "840-192", // USA
+    "192-484", "484-192", // Mexico
+    "192-044", "044-192", // Bahamas
+    "192-332", "332-192", // Haiti
+    "192-388", "388-192", // Jamaica
+
+    // New Zealand ("554")
+    "554-242", "242-554", // Fiji
+
+    // Taiwan ("158")
+    "158-156", "156-158", // China
+
+    // Cyprus ("196")
+    "196-300", "300-196", // Greece
+    "196-792", "792-196", // Turkey
+    "196-422", "422-196", // Lebanon
+    "196-760", "760-196", // Syria
+    "196-376", "376-196", // Israel
+    "196-818", "818-196", // Egypt
+
+    // Malta ("470")
+    "470-380", "380-470", // Italy
+    "470-788", "788-470", // Tunisia
+    "470-434", "434-470", // Libya
+
+    // Singapore ("702")
+    "702-458", "458-702", // Malaysia
+    "702-360", "360-702", // Indonesia
+  ]);
+
+  // 1. Add all precomputed land topology borders, excluding maritime
+  for (const [cid, neighbors] of Object.entries(PRECOMPUTED_BORDERS)) {
+    if (map[cid]) {
+      for (const nid of neighbors) {
+        if (map[nid]) {
+          const key = `${cid}-${nid}`;
+          if (!maritimePairs.has(key)) {
+            map[cid].add(nid);
+            map[nid].add(cid);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Add manual borders, excluding maritime
+  for (const [cid, neighbors] of Object.entries(MANUAL_BORDERS)) {
+    for (const nid of neighbors) {
+      if (map[cid] && map[nid]) {
+        const key = `${cid}-${nid}`;
+        if (!maritimePairs.has(key)) {
+          map[cid].add(nid);
+          map[nid].add(cid);
+        }
+      }
+    }
+  }
+
+  // Note: We completely skip nearest-capital fallbacks because we strictly ignore maritime boundaries!
+
+  const result: Record<string, string[]> = {};
+  for (const [cid, set] of Object.entries(map)) {
+    result[cid] = Array.from(set);
+  }
+
+  LAND_ONLY_BORDERS_MAP = result;
+  return result;
+}
+
 export function getCountryNeighbors(countryId: string): string[] {
   const map = getSymmetricBordersMap();
   return map[countryId] || [];
 }
 
-// Return complete country neighbors in supply chain mode to avoid any discrepancies
+// Return complete country neighbors in supply chain mode, strictly land-only
 export function getSupplyChainNeighbors(id: string): string[] {
-  return getCountryNeighbors(id);
+  const map = getLandOnlyBordersMap();
+  return map[id] || [];
 }
 
 /**
